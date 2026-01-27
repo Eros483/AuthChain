@@ -9,8 +9,16 @@ type ProposalFacts struct {
 	LinesRemoved int      `json:"lines_removed"`
 }
 
-type PriortiyResult struct {
-	Priority     string `json:"priority"`
-	RequiredRole string `json:"required_role"`
-	Reason       string `json:"reason"`
+type PriorityResult struct {
+	Priority            string   `json:"priority"`
+	RequiresApproval    bool     `json:"requires_approval"`
+	AssignedDevelopers  []string `json:"assigned_developers"`
+	AffectedDirectories []string `json:"affected_directories"`
+	Reason              string   `json:"reason"`
 }
+
+const (
+	PriorityHigh   = "high"
+	PriorityMedium = "medium"
+	PriorityLow    = "low"
+)
