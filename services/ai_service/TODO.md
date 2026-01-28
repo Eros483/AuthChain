@@ -7,11 +7,11 @@
     - Save checkpoint, extract relevant information including tool call, arguments, and reasoning.
     - Send reasoning to be summarized by LLM.
     - Use IPC to send reasoning, tool call, and arguments to blockchain pipeline.
-        - If accepted, restore state, continue execution.
+    - Blockchain executes, alert to user on frontend displays (tool call, arguments, LLM reasoning summary) asking for permission
+        - If user accepts on frontnend, restore state, continue execution.
         - If rejected, do NOT restore state—agent remains at interrupt point.
-            - Return rejection message to agent context.
-            - Agent acknowledges rejection and explains to user why action was blocked.
-            - Frontend displays warning with rejection reason.
+            - User provides rejection reasoning.
+            - Agent acknowledges rejection, along with reasoning, and recontinues/finishes execution.
 
 - **Use-Case Scenario**
     - Agent interacts with a sandboxed repository directory.
@@ -35,9 +35,7 @@
       "reasoning_summary",
       "timestamp",
       "checkpoint_id",
-      "agent_context"
     }
-
 ```
 
 - **State Restoration Logic**
