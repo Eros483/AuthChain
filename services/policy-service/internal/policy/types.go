@@ -10,15 +10,29 @@ type ProposalFacts struct {
 }
 
 type PriorityResult struct {
-	Priority            string   `json:"priority"`
+	Tier                string   `json:"priority"`
 	RequiresApproval    bool     `json:"requires_approval"`
 	AssignedDevelopers  []string `json:"assigned_developers"`
 	AffectedDirectories []string `json:"affected_directories"`
 	Reason              string   `json:"reason"`
 }
 
+type ApprovalDecision struct {
+	ProposalID      string `json:"proposal_id"`
+	DecisionBy      string `json:"decision_by"`
+	Approved        bool   `json:"approved"`
+	RejectionReason string `json:"rejection_reason"`
+	Timestamp       int64  `json:"timestamp"`
+}
+
+type BlockchainPayload struct {
+	ProposalID     string           `json:"proposal_id"`
+	ProposalFacts  ProposalFacts    `json:"proposal_facts"`
+	Decision       ApprovalDecision `json:"decision"`
+	PriorityResult PriorityResult   `json:"priority_result"`
+}
+
 const (
-	PriorityHigh   = "high"
-	PriorityMedium = "medium"
-	PriorityLow    = "low"
+	Tier1 = "tier1"
+	Tier2 = "tier2"
 )

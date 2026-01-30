@@ -9,21 +9,18 @@ import (
 type DirectoryOwnership struct {
 	Directory  string   `json:"directory"`
 	Developers []string `json:"developers"`
-	Priority   string   `json:"priority"`
 }
 
 type PolicyStore struct {
 	mu              sync.RWMutex
 	DirectoryOwners []DirectoryOwnership `json:"directory_owners"`
 	LineThreshold   int                  `json:"line_threshold"`
-	DefaultPriority string               `json:"default_priority"`
 }
 
 func NewPolicyStore() *PolicyStore {
 	return &PolicyStore{
 		DirectoryOwners: []DirectoryOwnership{},
 		LineThreshold:   50,
-		DefaultPriority: "medium",
 	}
 }
 
@@ -32,11 +29,11 @@ func (ps *PolicyStore) AddDirectoryOwnership(ownership DirectoryOwnership) error
 	defer ps.mu.Unlock()
 
 	if ownership.Directory == "" {
-		return errors.New("Dir path can not be empty")
+		return errors.New("dir path cannot be empty")
 	}
 
 	if len(ownership.Developers) == 0 {
-		return errors.New("Assign atleast 1 dev")
+		return errors.New("assign at least 1 dev")
 	}
 
 	for i, existing := range ps.DirectoryOwners {
@@ -60,7 +57,7 @@ func (ps *PolicyStore) RemoveDirectoryOwnership(directory string) error {
 			return nil
 		}
 	}
-	return errors.New("Dir Not Found")
+	return errors.New("dir not found")
 }
 
 func (ps *PolicyStore) GetAllOwnership() []DirectoryOwnership {
@@ -68,7 +65,6 @@ func (ps *PolicyStore) GetAllOwnership() []DirectoryOwnership {
 	defer ps.mu.RUnlock()
 
 	result := make([]DirectoryOwnership, len(ps.DirectoryOwners))
-
 	copy(result, ps.DirectoryOwners)
 	return result
 }
@@ -82,7 +78,7 @@ func (ps *PolicyStore) GetDirOwnership(dir string) (*DirectoryOwnership, error) 
 			return &owner, nil
 		}
 	}
-	return nil, errors.New("Dir not found")
+	return nil, errors.New("dir not found")
 }
 
 func (ps *PolicyStore) UpdateLineThreshold(threshold int) error {
@@ -90,7 +86,7 @@ func (ps *PolicyStore) UpdateLineThreshold(threshold int) error {
 	defer ps.mu.Unlock()
 
 	if threshold < 0 {
-		return errors.New("Threshold must be +ve")
+		return errors.New("threshold must be positive")
 	}
 	ps.LineThreshold = threshold
 	return nil
@@ -99,13 +95,11 @@ func (ps *PolicyStore) UpdateLineThreshold(threshold int) error {
 func (ps *PolicyStore) ToJSON() ([]byte, error) {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
-
 	return json.Marshal(ps)
 }
 
 func (ps *PolicyStore) FromJSON(data []byte) error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-
 	return json.Unmarshal(data, ps)
 }

@@ -15,10 +15,10 @@ func NewEvaluator(store *storage.PolicyStore) *Evaluator {
 }
 
 func (e *Evaluator) EvaluatePriority(p ProposalFacts) PriorityResult {
-	totalLines := p.LinesAdded + p.LinesRemoved
 	affectedDirs := make(map[string][]string)
-	highestPriority := ""
 	reasons := []string{}
+
+	tier := e.determineTier(p.ActionType)
 
 	allOwnerships := e.store.GetAllOwnership()
 
@@ -33,35 +33,16 @@ func (e *Evaluator) EvaluatePriority(p ProposalFacts) PriorityResult {
 				}
 			}
 		}
+
 		if bestMatch != nil {
 			if _, exists := affectedDirs[bestMatch.Directory]; !exists {
 				affectedDirs[bestMatch.Directory] = bestMatch.Developers
 			}
-
-			if highestPriority == "" || comparePriority(bestMatch.Priority, highestPriority) > 0 {
-				highestPriority = bestMatch.Priority
-			}
-
-			reasons = append(reasons, fmt.Sprintf("File '%s' matches protected Dir '%s'", file, bestMatch.Directory))
+			reasons = append(reasons, fmt.Sprintf("File '%s' matches protected dir '%s'", file, bestMatch.Directory))
 		}
-	}
-
-	exceedsThreshold := totalLines > e.store.LineThreshold
-	if exceedsThreshold {
-		reasons = append(reasons, fmt.Sprintf("Change size (%d lines) exceeds threshold (%d)", totalLines, e.store.LineThreshold))
-
-		if highestPriority == "" {
-			highestPriority = e.store.DefaultPriority
-		}
-	}
-
-	if highestPriority == "" {
-		highestPriority = PriorityLow
-		reasons = append(reasons, "No Protected Dir effected withing the line threshold")
 	}
 
 	developersMap := make(map[string]bool)
-
 	for _, devs := range affectedDirs {
 		for _, dev := range devs {
 			developersMap[dev] = true
@@ -78,35 +59,44 @@ func (e *Evaluator) EvaluatePriority(p ProposalFacts) PriorityResult {
 		affectedDirsNames = append(affectedDirsNames, dir)
 	}
 
-	reqApproval := highestPriority == PriorityHigh || exceedsThreshold
+	requiresApproval := tier == Tier2
+
+	if tier == Tier1 {
+		reasons = append(reasons, "Read-only operation (Tier 1) - no approval needed")
+	} else {
+		reasons = append(reasons, "Write operation (Tier 2) - approval required")
+	}
+
+	totalLines := p.LinesAdded + p.LinesRemoved
+	if totalLines > e.store.LineThreshold {
+		reasons = append(reasons, fmt.Sprintf("Large change (%d lines exceeds threshold of %d)", totalLines, e.store.LineThreshold))
+	}
 
 	return PriorityResult{
-		Priority:            highestPriority,
-		RequiresApproval:    reqApproval,
+		Tier:                tier,
+		RequiresApproval:    requiresApproval,
 		AssignedDevelopers:  assignedDevelopers,
 		AffectedDirectories: affectedDirsNames,
 		Reason:              strings.Join(reasons, "; "),
 	}
 }
 
-func comparePriority(p1, p2 string) int {
-	PrioritMap := map[string]int{
-		PriorityHigh:   3,
-		PriorityMedium: 2,
-		PriorityLow:    1,
+func (e *Evaluator) determineTier(actionType string) string {
+	readOnlyActions := map[string]bool{
+		"read":   true,
+		"view":   true,
+		"get":    true,
+		"fetch":  true,
+		"query":  true,
+		"search": true,
+		"list":   true,
 	}
 
-	val1, ok1 := PrioritMap[p1]
-	val2, ok2 := PrioritMap[p2]
+	actionLower := strings.ToLower(actionType)
 
-	if !ok1 || !ok2 {
-		return 0
+	if readOnlyActions[actionLower] {
+		return Tier1
 	}
 
-	if val1 > val2 {
-		return 1
-	} else if val1 < val2 {
-		return -1
-	}
-	return 0
+	return Tier2
 }
