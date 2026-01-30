@@ -37,7 +37,6 @@ type IPCResponse struct {
 }
 
 func (h *IPCHandler) Start() error {
-	// Remove existing socket if it exists
 	if err := os.RemoveAll(h.socketPath); err != nil {
 		return fmt.Errorf("failed to remove existing socket: %w", err)
 	}
