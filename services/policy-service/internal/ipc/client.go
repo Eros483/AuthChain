@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"policyservice/internal/policy"
+	"policyservice/internal/proposal"
 	"policyservice/internal/storage"
 )
 
@@ -77,6 +78,24 @@ func (c *IPCClient) SubmitDecision(decision policy.ApprovalDecision) error {
 	}
 
 	return nil
+}
+
+func (c *IPCClient) GetPendingProposals() ([]*proposal.StoredProposal, error) {
+	resp, err := c.sendRequest("get_pending", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to get pending proposals: %s", resp.Error)
+	}
+
+	var proposals []*proposal.StoredProposal
+	if err := json.Unmarshal(resp.Data, &proposals); err != nil {
+		return nil, fmt.Errorf("failed to parse proposals: %w", err)
+	}
+
+	return proposals, nil
 }
 
 func (c *IPCClient) AddDirectoryOwnership(ownership storage.DirectoryOwnership) error {

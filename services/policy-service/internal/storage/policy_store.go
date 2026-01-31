@@ -15,12 +15,14 @@ type PolicyStore struct {
 	mu              sync.RWMutex
 	DirectoryOwners []DirectoryOwnership `json:"directory_owners"`
 	LineThreshold   int                  `json:"line_threshold"`
+	ToolRegistry    *ToolRegistry        `json:"-"`
 }
 
 func NewPolicyStore() *PolicyStore {
 	return &PolicyStore{
 		DirectoryOwners: []DirectoryOwnership{},
 		LineThreshold:   50,
+		ToolRegistry:    NewToolRegistry(),
 	}
 }
 

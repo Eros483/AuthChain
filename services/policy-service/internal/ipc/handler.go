@@ -7,24 +7,26 @@ import (
 	"net"
 	"os"
 	"policyservice/internal/policy"
+	"policyservice/internal/proposal"
 	"policyservice/internal/storage"
 )
 
 type IPCHandler struct {
-	evaluator  *policy.Evaluator
-	store      *storage.PolicyStore
-	socketPath string
+	evaluator     *policy.Evaluator
+	policyStore   *storage.PolicyStore
+	proposalStore *proposal.ProposalStore
+	socketPath    string
 }
 
-func NewIPCHandler(store *storage.PolicyStore, socketPath string) *IPCHandler {
+func NewIPCHandler(policyStore *storage.PolicyStore, proposalStore *proposal.ProposalStore, socketPath string) *IPCHandler {
 	return &IPCHandler{
-		evaluator:  policy.NewEvaluator(store),
-		store:      store,
-		socketPath: socketPath,
+		evaluator:     policy.NewEvaluator(policyStore),
+		policyStore:   policyStore,
+		proposalStore: proposalStore,
+		socketPath:    socketPath,
 	}
 }
 
-// Action : "evaluate", "add_dir", "remove_dir", "get_dirs", "decision"
 type IPCRequest struct {
 	Action string          `json:"action"`
 	Data   json.RawMessage `json:"data"`
@@ -81,6 +83,8 @@ func (h *IPCHandler) handleConnection(conn net.Conn) {
 		h.handleEvaluate(encoder, req.Data)
 	case "decision":
 		h.handleDecision(encoder, req.Data)
+	case "get_pending":
+		h.handleGetPending(encoder)
 	case "add_dir":
 		h.handleAddDir(encoder, req.Data)
 	case "remove_dir":
@@ -101,7 +105,31 @@ func (h *IPCHandler) handleEvaluate(encoder *json.Encoder, data json.RawMessage)
 		return
 	}
 
+	if facts.ToolName == "" {
+		h.sendError(encoder, "tool_name is required")
+		return
+	}
+	if facts.CheckpointID == "" {
+		h.sendError(encoder, "checkpoint_id is required")
+		return
+	}
+	if facts.ProposalID == "" {
+		h.sendError(encoder, "proposal_id is required")
+		return
+	}
+
 	result := h.evaluator.EvaluatePriority(facts)
+
+	if result.RequiresApproval {
+		if err := h.proposalStore.Store(facts, result); err != nil {
+			log.Printf("Warning: Failed to store proposal %s: %v", facts.ProposalID, err)
+		} else {
+			log.Printf("✓ Stored proposal %s (status: pending)", facts.ProposalID)
+		}
+	}
+
+	log.Printf("Evaluated tool '%s': tier=%s, requires_approval=%v, checkpoint=%s",
+		facts.ToolName, result.Tier, result.RequiresApproval, facts.CheckpointID)
 
 	resultData, _ := json.Marshal(result)
 	encoder.Encode(IPCResponse{
@@ -122,24 +150,66 @@ func (h *IPCHandler) handleDecision(encoder *json.Encoder, data json.RawMessage)
 		return
 	}
 
-	log.Printf("Decision received for proposal %s: approved=%v, reason=%s",
-		decision.ProposalID, decision.Approved, decision.RejectionReason)
+	if decision.CheckpointID == "" {
+		h.sendError(encoder, "checkpoint_id is required for state restoration")
+		return
+	}
 
-	// TODO: Send to blockchain via IPC
-	// payload := policy.BlockchainPayload{
-	//     ProposalID: decision.ProposalID,
-	//     Decision: decision,
-	// }
-	// sendToBlockchain(payload)
+	storedProposal, err := h.proposalStore.Get(decision.ProposalID)
+	if err != nil {
+		h.sendError(encoder, fmt.Sprintf("proposal not found: %v", err))
+		return
+	}
 
-	responseData, _ := json.Marshal(map[string]string{
-		"status":      "decision recorded",
-		"proposal_id": decision.ProposalID,
+	if err := h.proposalStore.MarkResolved(decision.ProposalID, decision.Approved); err != nil {
+		log.Printf("Warning: Failed to mark proposal resolved: %v", err)
+	}
+
+	log.Printf("Decision received for proposal %s (checkpoint %s): approved=%v, reason=%s",
+		decision.ProposalID, decision.CheckpointID, decision.Approved, decision.RejectionReason)
+
+	blockchainPayload := policy.BlockchainPayload{
+		ProposalID:       decision.ProposalID,
+		CheckpointID:     decision.CheckpointID,
+		ToolName:         storedProposal.Facts.ToolName,
+		ToolArguments:    storedProposal.Facts.ToolArguments,
+		ReasoningSummary: storedProposal.Facts.ReasoningSummary,
+		Decision:         decision,
+		PriorityResult:   storedProposal.Result,
+		Timestamp:        decision.Timestamp,
+	}
+
+	log.Printf("✓ Built complete blockchain payload for proposal %s", decision.ProposalID)
+	log.Printf("  Tool: %s", blockchainPayload.ToolName)
+	log.Printf("  Decision: approved=%v", decision.Approved)
+	if !decision.Approved {
+		log.Printf("  Rejection reason: %s", decision.RejectionReason)
+	}
+
+	// TODO: Send blockchainPayload to blockchain service via IPC
+	// blockchainClient.RecordDecision(blockchainPayload)
+
+	responseData, _ := json.Marshal(map[string]interface{}{
+		"status":                   "decision recorded",
+		"proposal_id":              decision.ProposalID,
+		"checkpoint_id":            decision.CheckpointID,
+		"approved":                 decision.Approved,
+		"blockchain_payload_ready": true,
 	})
 
 	encoder.Encode(IPCResponse{
 		Success: true,
 		Data:    responseData,
+	})
+}
+
+func (h *IPCHandler) handleGetPending(encoder *json.Encoder) {
+	pending := h.proposalStore.GetPending()
+	data, _ := json.Marshal(pending)
+
+	encoder.Encode(IPCResponse{
+		Success: true,
+		Data:    data,
 	})
 }
 
@@ -150,7 +220,7 @@ func (h *IPCHandler) handleAddDir(encoder *json.Encoder, data json.RawMessage) {
 		return
 	}
 
-	if err := h.store.AddDirectoryOwnership(ownership); err != nil {
+	if err := h.policyStore.AddDirectoryOwnership(ownership); err != nil {
 		h.sendError(encoder, err.Error())
 		return
 	}
@@ -167,7 +237,7 @@ func (h *IPCHandler) handleRemoveDir(encoder *json.Encoder, data json.RawMessage
 		return
 	}
 
-	if err := h.store.RemoveDirectoryOwnership(req.Directory); err != nil {
+	if err := h.policyStore.RemoveDirectoryOwnership(req.Directory); err != nil {
 		h.sendError(encoder, err.Error())
 		return
 	}
@@ -176,7 +246,7 @@ func (h *IPCHandler) handleRemoveDir(encoder *json.Encoder, data json.RawMessage
 }
 
 func (h *IPCHandler) handleGetDirs(encoder *json.Encoder) {
-	ownerships := h.store.GetAllOwnership()
+	ownerships := h.policyStore.GetAllOwnership()
 	data, _ := json.Marshal(ownerships)
 
 	encoder.Encode(IPCResponse{
@@ -194,7 +264,7 @@ func (h *IPCHandler) handleUpdateThreshold(encoder *json.Encoder, data json.RawM
 		return
 	}
 
-	if err := h.store.UpdateLineThreshold(req.Threshold); err != nil {
+	if err := h.policyStore.UpdateLineThreshold(req.Threshold); err != nil {
 		h.sendError(encoder, err.Error())
 		return
 	}

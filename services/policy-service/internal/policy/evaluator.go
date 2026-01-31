@@ -18,7 +18,9 @@ func (e *Evaluator) EvaluatePriority(p ProposalFacts) PriorityResult {
 	affectedDirs := make(map[string][]string)
 	reasons := []string{}
 
-	tier := e.determineTier(p.ActionType)
+	tier := e.store.ToolRegistry.GetToolTier(p.ToolName)
+
+	reasons = append(reasons, fmt.Sprintf("Tool '%s' classified as %s", p.ToolName, tier))
 
 	allOwnerships := e.store.GetAllOwnership()
 
@@ -59,17 +61,15 @@ func (e *Evaluator) EvaluatePriority(p ProposalFacts) PriorityResult {
 		affectedDirsNames = append(affectedDirsNames, dir)
 	}
 
-	requiresApproval := tier == Tier2
-
-	if tier == Tier1 {
-		reasons = append(reasons, "Read-only operation (Tier 1) - no approval needed")
-	} else {
-		reasons = append(reasons, "Write operation (Tier 2) - approval required")
-	}
+	requiresApproval := tier == TierCritical
 
 	totalLines := p.LinesAdded + p.LinesRemoved
 	if totalLines > e.store.LineThreshold {
 		reasons = append(reasons, fmt.Sprintf("Large change (%d lines exceeds threshold of %d)", totalLines, e.store.LineThreshold))
+		if tier == TierSafe {
+			requiresApproval = true
+			reasons = append(reasons, "Approval required due to large change size")
+		}
 	}
 
 	return PriorityResult{
@@ -78,25 +78,6 @@ func (e *Evaluator) EvaluatePriority(p ProposalFacts) PriorityResult {
 		AssignedDevelopers:  assignedDevelopers,
 		AffectedDirectories: affectedDirsNames,
 		Reason:              strings.Join(reasons, "; "),
+		CheckpointID:        p.CheckpointID,
 	}
-}
-
-func (e *Evaluator) determineTier(actionType string) string {
-	readOnlyActions := map[string]bool{
-		"read":   true,
-		"view":   true,
-		"get":    true,
-		"fetch":  true,
-		"query":  true,
-		"search": true,
-		"list":   true,
-	}
-
-	actionLower := strings.ToLower(actionType)
-
-	if readOnlyActions[actionLower] {
-		return Tier1
-	}
-
-	return Tier2
 }
