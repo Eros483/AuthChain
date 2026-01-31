@@ -2,3 +2,5 @@ langchain-google-genai
 langgraph
 python-dotenv
 langchain-core
+pydantic_settings
+langchain-ollama

@@ -10,16 +10,10 @@ class Settings(BaseSettings):
     Central management for settings and configurations
     Reads .env file
     - Gemini API Key
-    - Persistent DB Path
-    - MySQL database user
-    - MySQL database passowrd
-    - database host
-    - database name
+    - Local LLM usage flag and model name
     """
-    DB_USER: str=os.getenv("DB_USER", "root")
-    DB_PASSWORD: str=os.getenv("DB_PASSWORD", "")
-    DB_HOST: str=os.getenv("DB_HOST", "localhost")
-    DB_NAME: str=os.getenv("DB_NAME", "fhs_coredb_local")
+    USE_LOCAL_LLM: bool = True 
+    LOCAL_MODEL_NAME: str = "qwen2.5-coder:7b"
 
     GEMINI_API_KEY: str=os.getenv("GEMINI_API_KEY")
     

@@ -61,7 +61,6 @@ def run_coding_agent(user_query: str):
 
 if __name__ == "__main__":
     query = (
-        "Scan the database projects. If any are deprecated, list the files in the sandbox, "
-        "then delete the task_tracker.db and update app.py to say 'Cleaned'."
+        input()
     )
     run_coding_agent(query)

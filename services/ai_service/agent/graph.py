@@ -6,17 +6,38 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.prebuilt import ToolNode
+from langchain_core.messages import SystemMessage
 
 from services.ai_service.agent.state import AgentState
 from services.ai_service.ai_tools.manager import get_tools, is_critical
 
 from backend.core.config import settings
+from backend.core.llm_factory import get_llm
 
-llm = ChatGoogleGenerativeAI(
-    model="models/gemini-2.5-flash", 
-    api_key=settings.GEMINI_API_KEY)
+llm = get_llm() 
 tools = get_tools()
 llm_with_tools = llm.bind_tools(tools)
+
+SYSTEM_PROMPT = SystemMessage(
+    content="""
+    You are an autonomous AI Engineer. 
+    You have access to the following tools:
+    - list_directory
+    - read_file
+    - write_file
+    - delete_file
+
+    To use a tool, you MUST generate a tool call. 
+    DO NOT describe what you want to do. JUST DO IT.
+    Start by running `list_directory` on the current folder.
+    """
+    )
+
+def call_model(state: AgentState):
+    # Prepend the System Message to the history
+    messages = [SYSTEM_PROMPT] + [m for m in state["messages"] if m.content or hasattr(m, "tool_calls")]
+    response = llm_with_tools.invoke(messages)
+    return {"messages": [response]}
 
 def call_model(state: AgentState):
     messages = [m for m in state["messages"] if m.content or hasattr(m, "tool_calls")]

@@ -1,0 +1,23 @@
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
+from backend.core.config import settings
+
+def get_llm():
+    """
+    Returns the configured LLM backend (Gemini or Local).
+    """
+    if settings.USE_LOCAL_LLM:
+        print(f"LOADING LOCAL MODEL: {settings.LOCAL_MODEL_NAME}")
+
+        return ChatOllama(
+            model=settings.LOCAL_MODEL_NAME,
+            temperature=0,
+        )
+    
+    else:
+        print("LOADING GEMINI CLOUD MODEL")
+        return ChatGoogleGenerativeAI(
+            model="models/gemini-1.5-flash",
+            api_key=settings.GEMINI_API_KEY
+        )
