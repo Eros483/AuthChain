@@ -1,5 +1,5 @@
-from agent.graph import graph
-from ipc.messenger import create_ipc_payload
+from services.ai_service.agent.graph import graph
+from services.ai_service.ipc.messenger import create_ipc_payload
 import uuid
 
 def run_demo():
@@ -24,17 +24,20 @@ def run_demo():
         user_input = input("\nApprove this action? (y/n): ")
         
         if user_input.lower() == 'y':
-            print("--- RESUMING EXECUTION ---")
-            for event in graph.stream(None, config, stream_mode="values"):
-                pass
+                    print("--- RESUMING EXECUTION ---")
+                    for event in graph.stream(None, config, stream_mode="values"):
+                        pass
         else:
             print("--- ACTION REJECTED BY USER ---")
-            rejection_msg = "User rejected this: Deleting the database is not allowed under security policy."
-            graph.update_state(config, {"messages": [{"role": "user", "content": rejection_msg}]}, as_node="critical_gate")
+            rejection_msg = "REJECTED: Deleting the database is not allowed under security policy."
             
+            # 1. Update the state with the rejection message
+            graph.update_state(config, {"messages": [{"role": "user", "content": rejection_msg}]}, as_node="agent")
+            
+            # 2. Tell the graph to start over at the 'agent' node so it can rethink
             for event in graph.stream(None, config, stream_mode="values"):
-                if "messages" in event:
-                    print(f"\nAgent's Response to Rejection: {event['messages'][-1].content}")
+                 if "messages" in event:
+                    print(f"\nAgent's Response: {event['messages'][-1].content}")
 
 if __name__ == "__main__":
     run_demo()

@@ -7,6 +7,7 @@
     - Save checkpoint, extract relevant information including tool call, arguments, and reasoning.
     - Send reasoning to be summarized by LLM.
     - Use IPC to send reasoning, tool call, and arguments to blockchain pipeline.
+        - i.e save to a common directory, teh blockchain will be watching this
     - Blockchain executes, alert to user on frontend displays (tool call, arguments, LLM reasoning summary) asking for permission
         - If user accepts on frontnend, restore state, continue execution.
         - If rejected, do NOT restore state—agent remains at interrupt point.
