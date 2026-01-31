@@ -1,43 +1,67 @@
-from services.ai_service.agent.graph import graph
-from services.ai_service.ipc.messenger import create_ipc_payload
+import os
 import uuid
+from services.ai_service.agent.graph import graph
+from services.ai_service.ipc.messenger import send_to_blockchain
+from langchain_core.messages import AIMessage, ToolMessage
 
-def run_demo():
-    """
-    Prototype AI critical tool execution workflow.
-    """
+def run_coding_agent(user_query: str):
+    os.makedirs("./services/ipc_mailbox/ai", exist_ok=True)
+    os.makedirs("./services/ipc_mailbox/blockchain", exist_ok=True)
+
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
+    inputs = {"messages": [{"role": "user", "content": user_query}]}
     
-    inputs = {"messages": [{"role": "user", "content": "The database is cluttered. Delete data.db to start fresh."}]}
-    
-    print("--- STARTING AGENT ---")
-    for event in graph.stream(inputs, config, stream_mode="values"):
-        pass
+    print(f"\n{'='*60}\n🚀 AGENT SESSION STARTING\nID: {thread_id}\n{'='*60}")
+
+    for event in graph.stream(inputs, config, stream_mode="updates"):
+        for node_name, data in event.items():
+            print(f"\n[NODE: {node_name}]")
+            
+            if "messages" in data:
+                last_msg = data["messages"][-1]
+
+                if isinstance(last_msg, AIMessage):
+                    if last_msg.tool_calls:
+                        for tc in last_msg.tool_calls:
+                            print(f"PLANNING TOOL: {tc['name']}")
+                            print(f"ARGS: {tc['args']}")
+                    if last_msg.content:
+                        print(f"🤖 AI THOUGHT: {last_msg.content}")
+                
+                elif isinstance(last_msg, ToolMessage):
+                    print(f"TOOL RESULT: {last_msg.content}")
 
     state = graph.get_state(config)
     if state.next:
-        print("\n🛑 CRITICAL ACTION DETECTED!")
-        payload = create_ipc_payload(state.values, thread_id)
-        print(f"IPC Payload for Blockchain:\n{payload}")
-
-        user_input = input("\nApprove this action? (y/n): ")
+        payload = send_to_blockchain(state.values, thread_id)
         
-        if user_input.lower() == 'y':
-                    print("--- RESUMING EXECUTION ---")
-                    for event in graph.stream(None, config, stream_mode="values"):
-                        pass
+        print("\n" + "!"*20 + " GOVERNANCE REQUIRED " + "!"*20)
+        print(f"CRITICAL TOOL DETECTED: {payload['tool_name']}")
+        print(f"REASONING SUMMARY: {payload['reasoning_summary']}")
+        print("!"*60)
+
+        choice = input("\n[SIMULATED BC] Approve Proposal? (y/n): ")
+        
+        if choice.lower() == 'y':
+            print("\nAPPROVAL RECEIVED. RESUMING...")
+            for event in graph.stream(None, config, stream_mode="updates"):
+                print(f"[NODE: {list(event.keys())[0]}] ...executing approved tool.")
+            print("\nTASK COMPLETED.")
         else:
-            print("--- ACTION REJECTED BY USER ---")
-            rejection_msg = "REJECTED: Deleting the database is not allowed under security policy."
+            print("\nREJECTION RECEIVED. INJECTING POLICY FEEDBACK...")
+            rejection = "REJECTED: Security Policy violation. Direct database deletion is strictly prohibited."
+            graph.update_state(config, {"messages": [{"role": "user", "content": rejection}]}, as_node="agent")
             
-            # 1. Update the state with the rejection message
-            graph.update_state(config, {"messages": [{"role": "user", "content": rejection_msg}]}, as_node="agent")
-            
-            # 2. Tell the graph to start over at the 'agent' node so it can rethink
-            for event in graph.stream(None, config, stream_mode="values"):
-                 if "messages" in event:
-                    print(f"\nAgent's Response: {event['messages'][-1].content}")
+            for event in graph.stream(None, config, stream_mode="updates"):
+                node = list(event.keys())[0]
+                if node == "agent":
+                    msg = event[node]["messages"][-1]
+                    print(f"\n[NODE: agent]\n🤖 RECOVERY RESPONSE: {msg.content}")
 
 if __name__ == "__main__":
-    run_demo()
+    query = (
+        "Scan the database projects. If any are deprecated, list the files in the sandbox, "
+        "then delete the task_tracker.db and update app.py to say 'Cleaned'."
+    )
+    run_coding_agent(query)
