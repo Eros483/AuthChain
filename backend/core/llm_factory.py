@@ -19,6 +19,6 @@ def get_llm():
     else:
         print("LOADING GEMINI CLOUD MODEL")
         return ChatGoogleGenerativeAI(
-            model="models/gemini-2.5-flash",
+            model="models/gemini-2.5-flash-lite",
             api_key=settings.GEMINI_API_KEY
         )
