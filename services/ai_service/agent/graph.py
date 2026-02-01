@@ -15,7 +15,8 @@ from services.ai_service.ai_tools.manager import get_tools, is_critical
 from backend.core.llm_factory import get_llm
 
 llm = get_llm() 
-tools = get_tools()
+tools = get_tools(llm)
+
 llm_with_tools = llm.bind_tools(tools)
 
 def call_model(state: AgentState):

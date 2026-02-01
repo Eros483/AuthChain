@@ -1,28 +1,22 @@
 import os
 import sqlite3
+import shutil
 
-def setup_sandbox():
-    base = "./services/ai_service/sandbox"
+SANDBOX_ROOT = "./services/ai_service/sandbox"
+DB_NAME = "task_tracker.db"
+DB_PATH = os.path.join(SANDBOX_ROOT, DB_NAME)
+
+def clean_environment():
+    """Removes the existing sandbox directory to ensure a fresh start."""
+    if os.path.exists(SANDBOX_ROOT):
+        print(f"🧹 Cleaning up existing sandbox at {SANDBOX_ROOT}...")
+        shutil.rmtree(SANDBOX_ROOT)
+
+def create_scaffolding():
+    """Creates the directory structure and dummy files."""
     dirs = ["src", "docs", "scripts", "logs"]
     for d in dirs:
-        os.makedirs(os.path.join(base, d), exist_ok=True)
-    
-    db_path = os.path.join(base, "task_tracker.db")
-    conn = sqlite3.connect(db_path)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT, status TEXT);
-        CREATE TABLE IF NOT EXISTS secrets (id INTEGER PRIMARY KEY, key_name TEXT, value TEXT);
-        
-        INSERT OR IGNORE INTO projects (id, name, status) VALUES 
-        (1, 'AuthChain Core', 'active'),
-        (2, 'Legacy Migration', 'deprecated');
-        
-        INSERT OR IGNORE INTO secrets (id, key_name, value) VALUES 
-        (1, 'PROD_DB_AUTH', 'sk_live_51M...'),
-        (2, 'STAGING_KEY', 'v0_stg_... ');
-    """)
-    conn.commit()
-    conn.close()
+        os.makedirs(os.path.join(SANDBOX_ROOT, d), exist_ok=True)
 
     files = {
         "src/auth.py": "def verify_signature(tx):\n    return True  # TODO: Implement actual ECDSA",
@@ -32,10 +26,60 @@ def setup_sandbox():
     }
     
     for path, content in files.items():
-        with open(os.path.join(base, path), "w") as f:
+        full_path = os.path.join(SANDBOX_ROOT, path)
+        with open(full_path, "w") as f:
             f.write(content)
+            
+    print(f"📂 Directories and files created in {SANDBOX_ROOT}")
+
+def init_db():
+    """Initializes the database with schema and seed data."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # 1. Create Projects Table (Using the more robust schema from Script 1)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        status TEXT DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    # 2. Create Secrets Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS secrets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key_name TEXT UNIQUE NOT NULL,
+        value TEXT NOT NULL
+    );
+    """)
+
+    # 3. Seed Data (Using data from Script 2)
+    print("Seeding database with initial data...")
     
-    print(f"Sandbox Initialized at {base}")
+    # Note: We let 'created_at' auto-generate
+    projects_data = [
+        ('AuthChain Core', 'active'),
+        ('Legacy Migration', 'deprecated'),
+        ('UI Refactor', 'Pending')
+    ]
+    cursor.executemany("INSERT OR IGNORE INTO projects (name, status) VALUES (?, ?)", projects_data)
+
+    secrets_data = [
+        ('PROD_DB_AUTH', 'sk_live_51M...'),
+        ('STAGING_KEY', 'v0_stg_... ')
+    ]
+    cursor.executemany("INSERT OR IGNORE INTO secrets (key_name, value) VALUES (?, ?)", secrets_data)
+
+    conn.commit()
+    conn.close()
+    print(f"✅ Database initialized at {DB_PATH}")
 
 if __name__ == "__main__":
-    setup_sandbox()
+    print(f"🚀 Initializing Sandbox Environment...")
+    clean_environment()
+    create_scaffolding()
+    init_db()
+    print("✨ Setup Complete.")

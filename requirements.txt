@@ -5,3 +5,4 @@ langchain-core
 pydantic_settings
 langchain-ollama
 langgraph-checkpoint-sqlite
+langchain-community
