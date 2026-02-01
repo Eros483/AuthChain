@@ -4,3 +4,4 @@ python-dotenv
 langchain-core
 pydantic_settings
 langchain-ollama
+langgraph-checkpoint-sqlite
