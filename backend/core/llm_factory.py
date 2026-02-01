@@ -1,4 +1,5 @@
-import os
+# -----  LLM handler @ backend/core/llm_factory.py -----
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from backend.core.config import settings
@@ -18,6 +19,6 @@ def get_llm():
     else:
         print("LOADING GEMINI CLOUD MODEL")
         return ChatGoogleGenerativeAI(
-            model="models/gemini-1.5-flash",
+            model="models/gemini-2.5-flash",
             api_key=settings.GEMINI_API_KEY
         )
