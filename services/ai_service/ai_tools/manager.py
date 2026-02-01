@@ -1,7 +1,6 @@
-# ----- File systems and DB tools @ services/ai_service/ai_tools/manager.py -----
-
-from langchain_core.tools import tool
 import os
+import subprocess
+from langchain_core.tools import tool
 from services.ai_service.ai_tools.db_setup import get_sql_tools
 
 SANDBOX_PATH = os.path.abspath("./services/ai_service/sandbox")
@@ -14,11 +13,55 @@ def _resolve_path(path: str) -> str:
     path = path.lstrip('./').lstrip('/')
     return os.path.join(SANDBOX_PATH, path)
 
+# --- GIT TOOLS (NEW) ---
+
+def _run_git_command(args: list) -> str:
+    """Helper to run git commands in the sandbox root"""
+    try:
+        # Ensure we run git inside the sandbox directory
+        result = subprocess.run(
+            ["git"] + args,
+            cwd=SANDBOX_PATH,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        return f"GIT ERROR: {e.stderr}"
+    except FileNotFoundError:
+        return "ERROR: Git is not installed in the environment."
+
+@tool
+def git_status() -> str:
+    """
+    Shows the working tree status (changed files, untracked files).
+    Use this to see what has changed before committing.
+    """
+    return _run_git_command(["status"])
+
+@tool
+def git_log(limit: int = 5) -> str:
+    """
+    Shows the commit logs.
+    Args:
+        limit: Number of commits to show (default 5)
+    """
+    return _run_git_command(["log", f"-n {limit}", "--oneline"])
+
+@tool
+def git_diff() -> str:
+    """
+    Shows changes between commits, commit and working tree, etc.
+    """
+    return _run_git_command(["diff"])
+
+# --- FILE SYSTEM TOOLS ---
+
 @tool
 def list_directory(path: str = ".") -> str:
     """
     Lists all files and subdirectories in the specified sandbox directory.
-    
     Args:
         path: Relative path from sandbox root (e.g., "src" or "." for root)
     """
@@ -39,10 +82,10 @@ def list_directory(path: str = ".") -> str:
     for item in sorted(items):
         item_path = os.path.join(full_path, item)
         if os.path.isdir(item_path):
-            result.append(f"  📁 {item}/")
+            result.append(f"{item}/")
         else:
             size = os.path.getsize(item_path)
-            result.append(f"  📄 {item} ({size} bytes)")
+            result.append(f"{item} ({size} bytes)")
     
     return "\n".join(result)
 
@@ -51,6 +94,12 @@ def read_file(path: str) -> str:
     """
     Reads the complete contents of a file from the sandbox.
     """
+    # [FIX] Binary File Protection
+    BINARY_EXTENSIONS = {'.db', '.sqlite', '.sqlite-wal', '.sqlite-shm', '.pyc', '.png', '.jpg', '.jpeg', '.bin'}
+    _, ext = os.path.splitext(path)
+    if ext.lower() in BINARY_EXTENSIONS:
+        return f"ERROR: '{path}' is a binary file. Reading it will crash the agent. Use specific tools (like sql_db_query) to inspect this file."
+
     full_path = _resolve_path(path)
     
     if not os.path.exists(full_path):
@@ -80,6 +129,10 @@ def search_codebase(query: str) -> str:
             
         for file in files:
             file_path = os.path.join(root, file)
+            # [FIX] Skip binary files in search too
+            if file.endswith(('.db', '.sqlite', '.pyc')):
+                continue
+
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
@@ -102,8 +155,6 @@ def write_file(path: str, content: str) -> str:
     CRITICAL ACTION - Requires human approval.
     """
     full_path = _resolve_path(path)
-    
-    # Create directory if needed
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
     
     try:
@@ -111,7 +162,7 @@ def write_file(path: str, content: str) -> str:
             f.write(content)
         
         size = len(content)
-        return f"✅ Successfully wrote {size} bytes to '{path}'"
+        return f"Successfully wrote {size} bytes to '{path}'"
     except Exception as e:
         return f"ERROR writing to '{path}': {str(e)}"
 
@@ -140,11 +191,14 @@ def deploy_to_production() -> str:
     """
     return "🚀 DEPLOYMENT SIGNAL SENT TO PRODUCTION PIPELINE"
 
+# --- CONFIGURATION ---
+
+# [FIX] Updated Security Tiers
 TIER_CRITICAL = [
     "write_file",
     "delete_file", 
     "deploy_to_production",
-    "sql_db_query"
+    "sql_db_query", # Keeping raw SQL as critical
 ]
 
 TIER_SAFE = [
@@ -153,19 +207,19 @@ TIER_SAFE = [
     "search_codebase",
     "sql_db_list_tables",
     "sql_db_schema",
-    "sql_db_query_checker"
+    "sql_db_query_checker",
+    "git_status",  # Safe
+    "git_log",     # Safe
+    "git_diff"     # Safe
 ]
 
 def is_critical(tool_name: str) -> bool:
-    """
-    Check if a tool requires human approval
-    """
+    """Check if a tool requires human approval"""
     return tool_name in TIER_CRITICAL
 
 def get_tools(llm):
     """
-    Returns combined list of File tools + SQL tools.
-    Requires 'llm' to initialize SQL toolkit.
+    Returns combined list of File tools + SQL tools + Git tools.
     """
     file_tools = [
         list_directory, 
@@ -173,7 +227,10 @@ def get_tools(llm):
         search_codebase, 
         write_file, 
         delete_file, 
-        deploy_to_production
+        deploy_to_production,
+        git_status, # Added
+        git_log,    # Added
+        git_diff    # Added
     ]
 
     sql_tools = get_sql_tools(llm)

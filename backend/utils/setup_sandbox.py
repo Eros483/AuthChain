@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import shutil
+import subprocess
 
 SANDBOX_ROOT = "./services/ai_service/sandbox"
 DB_NAME = "task_tracker.db"
@@ -13,7 +14,7 @@ def clean_environment():
         shutil.rmtree(SANDBOX_ROOT)
 
 def create_scaffolding():
-    """Creates the directory structure and dummy files."""
+    """Creates the directory structure, dummy files, and initializes git."""
     dirs = ["src", "docs", "scripts", "logs"]
     for d in dirs:
         os.makedirs(os.path.join(SANDBOX_ROOT, d), exist_ok=True)
@@ -31,6 +32,15 @@ def create_scaffolding():
             f.write(content)
             
     print(f"📂 Directories and files created in {SANDBOX_ROOT}")
+
+    # [FIX] Initialize Git Repo so agent git tools work
+    try:
+        subprocess.run(["git", "init"], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "add", "."], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "commit", "-m", "Initial scaffold"], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
+        print(f"🌲 Git repository initialized in {SANDBOX_ROOT}")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not initialize git: {e}")
 
 def init_db():
     """Initializes the database with schema and seed data."""
