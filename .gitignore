@@ -9,4 +9,4 @@ env/
 venv/
 
 -- IPC ignores ---
-*.json
+# *.json

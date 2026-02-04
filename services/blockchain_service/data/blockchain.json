@@ -1,0 +1,65 @@
+{
+  "blocks": [
+    {
+      "index": 0,
+      "timestamp": 1770207843,
+      "previous_hash": "0",
+      "hash": "87d4de1b41383103b96a783fb15d0b1b11e408570e3ff99c680d2f24e6db7ee3",
+      "data": {
+        "proposal_id": "genesis",
+        "checkpoint_id": "genesis",
+        "tool_name": "init",
+        "tool_arguments": {},
+        "reasoning_summary": "AuthChain Genesis block",
+        "decision": {
+          "approved": true,
+          "decision_by": "system",
+          "timestamp": 1770207843
+        },
+        "timestamp": 1770207843
+      },
+      "validator_sig": []
+    },
+    {
+      "index": 1,
+      "timestamp": 1770207920,
+      "previous_hash": "87d4de1b41383103b96a783fb15d0b1b11e408570e3ff99c680d2f24e6db7ee3",
+      "hash": "10dad15b8f0b3ce4387335986f438201147f260da9f5c8b698557b883c404b6e",
+      "data": {
+        "proposal_id": "prop-1dbd72ab",
+        "checkpoint_id": "1dbd72ab-a245-492e-949b-4ab217cb2a44",
+        "tool_name": "delete_file",
+        "tool_arguments": {
+          "path": "./services/ai_service/sandbox/task_tracker.db"
+        },
+        "reasoning_summary": "I cannot provide information or guidance on illegal or harmful activities, such as deleting user data. Is there something else I can help you with?",
+        "decision": {
+          "approved": true,
+          "decision_by": "human",
+          "timestamp": 1770207920
+        },
+        "timestamp": 1770207920
+      },
+      "validator_sig": [
+        {
+          "validator_id": "validator-1",
+          "validator_name": "Alice",
+          "signature": "976679c11ff0cd846b3d8ed28386facb14f0727b1beeb86e2bd85e4bf3f4fb2d",
+          "timestamp": 1770207920
+        },
+        {
+          "validator_id": "validator-2",
+          "validator_name": "Bob",
+          "signature": "271a8a6e1a53c6f47b53c58ce4c479eaa80df2f8f0e09abe47e0d6c51b863fee",
+          "timestamp": 1770207920
+        },
+        {
+          "validator_id": "validator-3",
+          "validator_name": "Charlie",
+          "signature": "f1ee563894ab6b3c14431e57b9e56ea2606c1108a346b1f30b39e79fd90d0c44",
+          "timestamp": 1770207920
+        }
+      ]
+    }
+  ]
+}
