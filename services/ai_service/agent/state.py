@@ -1,4 +1,4 @@
-# services/ai_service/agent/state.py -- AgentState definition
+# -----  AI Agent State Definition @ services/ai_service/agent/state.py -----
 
 from typing import Annotated, TypedDict, List, Optional
 from langchain_core.messages import BaseMessage

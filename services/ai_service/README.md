@@ -1,8 +1,7 @@
-# Services overview
-- **`ai_service/`**:
-  - Handles AI aspects of environment and staging.
-  - Primary LangGraph agent handler classes.
-  - Misc LLM tools.
+# AI service overview
+- **`agent/`**:
+  - Primary execution agent.
+  - Contains tools to be called, langgraph checkpointing, langgraph state restore, etc.
 
-- **`blockchain_service/`**:
-  - Handles blockchain verification of sensitive tool calls.
+- **`ai_tools/`**
+  - Contains minor AI utility tools, such as summary generation.

@@ -1,3 +1,5 @@
+# -----  IPC Messenger for AI and Blockchain Communication @ services/ai_service/ipc/messenger.py -----
+
 import os
 import json
 from datetime import datetime

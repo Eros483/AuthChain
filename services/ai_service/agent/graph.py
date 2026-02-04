@@ -22,30 +22,24 @@ llm_with_tools = llm.bind_tools(tools)
 def call_model(state: AgentState):
     messages = state["messages"]
     
-    # 1. System Prompt Injection
     if not messages or not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
-    
-    # 2. Improved Infinite Loop Guard - PLACE HERE, EARLY
+
     if len(messages) > 8:
-        # Look at last 4 messages for alternating patterns
         recent = messages[-4:]
         tool_calls = [m for m in recent if hasattr(m, 'tool_calls') and m.tool_calls]
-        
-        # If we've made 2+ tool calls in last 4 messages with same tool
+
         if len(tool_calls) >= 2:
             tool_names = [tc['name'] for msg in tool_calls for tc in msg.tool_calls]
             if len(tool_names) >= 2 and tool_names[-1] == tool_names[-2]:
                 return {"messages": [AIMessage(content="Task completed. Stopping to prevent infinite loop.")]}
-    
-    # 3. Error Handling ONLY (remove the else block)
+
     if isinstance(messages[-1], ToolMessage):
         last_content = messages[-1].content
         if "ERROR" in last_content or "does not exist" in last_content:
             messages.append(
-                HumanMessage(content="⚠️ The previous tool failed. Do NOT try the exact same action again. Check the available files list and try a different file.")
+                HumanMessage(content="The previous tool failed. Do NOT try the exact same action again. Check the available files list and try a different file.")
             )
-        # DELETED: The else block that was forcing "analyze the output"
 
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
@@ -127,8 +121,6 @@ workflow.add_edge("safe_tools", "agent")
 workflow.add_edge("critical_gate", "execute_critical")
 workflow.add_edge("execute_critical", "agent")
 
-# --- SQLITE CHECKPOINTER SETUP ---
-# Ensure this path exists or is writable
 db_path = "./services/ai_service/sandbox/checkpoints.sqlite"
 conn = sqlite3.connect(db_path, check_same_thread=False)
 checkpointer = SqliteSaver(conn)
