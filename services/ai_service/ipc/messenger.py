@@ -6,6 +6,7 @@ from datetime import datetime
 
 AI_MAILBOX = os.path.abspath("./services/ipc_mailbox/ai")
 BC_MAILBOX = os.path.abspath("./services/ipc_mailbox/blockchain")
+POLICY_MAILBOX = os.path.abspath("./services/ipc_mailbox/policy")
 
 def send_to_blockchain(state: dict, thread_id: str):
     """
