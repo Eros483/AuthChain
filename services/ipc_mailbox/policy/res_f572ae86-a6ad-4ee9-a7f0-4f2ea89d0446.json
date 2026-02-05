@@ -1,0 +1,8 @@
+{
+  "affected_directories": [],
+  "assigned_developers": [],
+  "proposal_id": "prop-f572ae86",
+  "reason": "Tool 'write_file' classified as tier_critical",
+  "requires_approval": true,
+  "tier": "tier_critical"
+}
