@@ -37,6 +37,6 @@ if __name__ == "__main__":
         reload=True,
         reload_excludes=[
             "services/ai_service/sandbox",
-            "services/ai_service/sandbox/*",
+            "services/ai_service/sandbox/**",
         ],
     )
