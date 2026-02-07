@@ -152,7 +152,7 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         # Optional blockchain notification (don't fail if it's down)
         try:
             import requests
-            BLOCKCHAIN_URL = "http://localhost:8081/api"
+            BLOCKCHAIN_URL = "https://authchaingo.onrender.com/api"
             requests.post(
                 f"{BLOCKCHAIN_URL}/actions",
                 json={
