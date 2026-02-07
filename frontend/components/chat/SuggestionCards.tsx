@@ -5,16 +5,16 @@ interface Props {
 }
 
 const suggestions = [
-  "What can I ask you to do?",
-  "Which one of my projects is performing the best?",
-  "What projects should I be concerned about right now?",
+  "Build a simple MLP wrapper class.",
+  "Commit all pending changes.",
+  "Delete the database.",
 ];
 
 export default function SuggestionCards({ onSelect }: Props) {
   return (
     <div className="mb-6">
       <p className="text-xs text-neutral-500 mb-3">
-        Suggestions on what to ask Our AI
+        Suggestions to see how AuthChain helps you handle critical actions
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {suggestions.map((suggestion, index) => (

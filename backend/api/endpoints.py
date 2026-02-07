@@ -31,7 +31,7 @@ def run_agent_background(query: str, thread_id: str):
     """
     try:
         execution_status[thread_id] = "RUNNING"
-        actual_thread_id, status, output = run_agent_interactive(query)
+        actual_thread_id, status, output = run_agent_interactive(query, thread_id)
         execution_status[thread_id] = status
         
         # Store the final response from the agent

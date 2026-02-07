@@ -5,6 +5,7 @@
 **POST** `/api/v1/agent/execute`
 
 Starts the AI agent with a user query. The agent runs in the background and returns immediately.
+The `thread_id` returned here is the canonical ID used across all follow-up endpoints, including critical-action approval flow.
 
 #### Request Body
 
@@ -119,7 +120,7 @@ Retrieve details about a pending critical action that requires approval.
 
 #### Path Parameters
 
-- `thread_id` (string, required) - The session identifier
+- `thread_id` (string, required) - The session identifier returned from `/agent/execute`
 
 #### Response
 

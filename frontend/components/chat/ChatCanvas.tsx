@@ -158,14 +158,21 @@ export default function ChatCanvas() {
       <div className="absolute inset-0 bg-gradient-to-br from-pink-200/40 via-transparent to-violet-300/40 pointer-events-none" />
 
       <div className="relative flex flex-col min-h-screen">
-        <header className="px-8 py-6">
-          <h1 className="text-sm font-medium text-neutral-500">Chat Bot UI</h1>
-        </header>
 
         {showWelcome && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8">
-            <div className="text-4xl text-[#1b0b1f]">✦</div>
-            <p className="text-xl text-[#1b0b1f]">Ask our AI anything</p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
+           
+            <div className="flex flex-col items-center">
+              {/* AuthChain - Bold and cleaner, sized correctly */}
+              <h1 className="text-5xl font-bold text-[#1b0b1f] tracking-tight">
+                AuthChain
+              </h1>
+
+              {/* Tagline - Smaller and italicized */}
+              <p className="text-sm md:text-base text-[#1b0b1f]/90 italic font-medium leading-relaxed max-w-lg">
+                Agent Execution powered with Blockchain governance
+              </p>
+            </div>
           </div>
         )}
 

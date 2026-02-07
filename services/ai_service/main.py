@@ -10,7 +10,7 @@ from services.ai_service.agent.prompts import format_rejection_message
 
 API_BASE_URL = "http://localhost:8000/api/v1"
 
-def run_agent_interactive(user_query: str):
+def run_agent_interactive(user_query: str, thread_id: str = None):
     """
     Runs the agent with interactive approval flow and enhanced observability.
     
@@ -23,7 +23,7 @@ def run_agent_interactive(user_query: str):
     Returns:
         tuple: (thread_id, status, agent_output)
     """
-    thread_id = str(uuid.uuid4())
+    thread_id = thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
     
     print("=" * 80)
