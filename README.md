@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ```
 
 - Set your Gemini API key in your `.env`.
-  - **Note**: `ollama` or  a suitable LLM provider can be utilised for the project, refer to the `llm factory notes` section.
+  - **Note**: `ollama` or  a suitable LLM provider can be utilised for the project, refer to the [LLM Usage Notes](#llm-usage-notes) section.
 
 ## Usage
 TODO
