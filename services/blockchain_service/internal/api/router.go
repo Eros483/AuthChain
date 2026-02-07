@@ -18,10 +18,13 @@ func SetupRouter(handler *Handler) *gin.Engine {
 
 	api := router.Group("/api")
 	{
+		api.POST("/actions", handler.SubmitAction)
 		api.POST("/blocks", handler.RecordDecision)
+
 		api.GET("/blocks", handler.GetBlocks)
 		api.GET("/blocks/:index", handler.GetBlock)
 		api.GET("/blocks/proposal/:proposal_id", handler.GetBlockByProposal)
+
 		api.POST("/verify", handler.VerifyChain)
 
 		api.POST("/validators", handler.AddValidator)

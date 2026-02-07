@@ -8,23 +8,30 @@ import (
 	"authchain/internal/block"
 	"authchain/internal/chain"
 	"authchain/internal/consensus"
+	"authchain/internal/governance"
 	"authchain/internal/validator"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
+	governance *governance.ProposalStore
+	tools      *governance.ToolRegistry
 	blockchain *chain.Blockchain
 	consensus  *consensus.QuorumConsensus
 	validators *validator.ValidatorRegistry
 }
 
 func NewHandler(
+	ps *governance.ProposalStore,
+	tr *governance.ToolRegistry,
 	bc *chain.Blockchain,
 	qc *consensus.QuorumConsensus,
 	vr *validator.ValidatorRegistry,
 ) *Handler {
 	return &Handler{
+		governance: ps,
+		tools:      tr,
 		blockchain: bc,
 		consensus:  qc,
 		validators: vr,
@@ -56,6 +63,40 @@ type PriorityResult struct {
 	RequiresApproval bool   `json:"requires_approval"`
 	Reason           string `json:"reason"`
 	CheckpointID     string `json:"checkpoint_id"`
+}
+
+func (h *Handler) SubmitAction(c *gin.Context) {
+	var req struct {
+		ProposalID       string                 `json:"proposal_id"`
+		CheckpointID     string                 `json:"checkpoint_id"`
+		ToolName         string                 `json:"tool_name"`
+		ToolArguments    map[string]interface{} `json:"tool_arguments"`
+		ReasoningSummary string                 `json:"reasoning_summary"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	isCritical := h.tools.IsCritical(req.ToolName)
+
+	if isCritical {
+		h.governance.Store(&governance.Proposal{
+			ProposalID:       req.ProposalID,
+			CheckpointID:     req.CheckpointID,
+			ToolName:         req.ToolName,
+			ToolArguments:    req.ToolArguments,
+			ReasoningSummary: req.ReasoningSummary,
+			Status:           "pending",
+			CreatedAt:        time.Now(),
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"critical": isCritical,
+		"status":   "submitted",
+	})
 }
 
 func (h *Handler) RecordDecision(c *gin.Context) {
@@ -93,6 +134,14 @@ func (h *Handler) RecordDecision(c *gin.Context) {
 	}
 
 	log.Printf("✓ Block created: #%d (hash: %s)", newBlock.Index, newBlock.Hash[:16]+"...")
+
+	if err := h.governance.Resolve(
+		payload.ProposalID,
+		payload.Decision.Approved,
+		payload.Decision.DecisionBy,
+	); err != nil {
+		log.Printf("Warning: failed to resolve proposal: %v", err)
+	}
 
 	if err := h.consensus.ProposeBlock(newBlock); err != nil {
 		log.Printf("Failed to propose block: %v", err)

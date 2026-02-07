@@ -8,10 +8,14 @@ import (
 	"authchain/internal/api"
 	"authchain/internal/chain"
 	"authchain/internal/consensus"
+	"authchain/internal/governance"
 	"authchain/internal/validator"
 )
 
 func main() {
+	proposalStore := governance.NewProposalStore()
+	toolRegistry := governance.NewToolRegistry()
+
 	log.Println("AuthChain Blockchain Service Starting")
 
 	if err := os.MkdirAll("./services/blockchain_service/data", 0755); err != nil {
@@ -31,28 +35,16 @@ func main() {
 	quorumConsensus := consensus.NewQuorumConsensus(validatorRegistry)
 	log.Printf("✓ Consensus mechanism initialized")
 
-	handler := api.NewHandler(blockchain, quorumConsensus, validatorRegistry)
+	handler := api.NewHandler(
+		proposalStore,
+		toolRegistry,
+		blockchain,
+		quorumConsensus,
+		validatorRegistry,
+	)
 	router := api.SetupRouter(handler)
 
 	log.Println("Port: 8081")
-	log.Println("")
-	log.Println("Endpoints:")
-	log.Println("   Blocks:")
-	log.Println("      POST   /api/blocks")
-	log.Println("      GET    /api/blocks")
-	log.Println("      GET    /api/blocks/:index")
-	log.Println("      GET    /api/blocks/proposal/:proposal_id")
-	log.Println("")
-	log.Println("   Validators:")
-	log.Println("      POST   /api/validators")
-	log.Println("      GET    /api/validators")
-	log.Println("      DELETE /api/validators/:id")
-	log.Println("")
-	log.Println("   System:")
-	log.Println("      POST   /api/verify")
-	log.Println("      GET    /api/health")
-	log.Println("")
-	log.Println("NOTE: Add at least 1 validator before recording decisions")
 
 	if err := router.Run(":8081"); err != nil {
 		log.Fatal("Failed to start server:", err)
