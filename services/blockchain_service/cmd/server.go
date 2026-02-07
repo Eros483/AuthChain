@@ -62,7 +62,7 @@ func main() {
 	router := api.SetupRouter(handler)
 	healthURL := "https://authchaingo.onrender.com/api/health"
 	go pingSelf(healthURL)
-	healthURLPython := "https://authchain-ejkf.onrender.com"
+	healthURLPython := "https://authchain-ejkf.onrender.com/health"
 	go pingSelf(healthURLPython)
 
 	log.Println("Port: 8081")
