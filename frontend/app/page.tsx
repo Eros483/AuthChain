@@ -15,11 +15,11 @@ const referenceData = [
 { label: "Permission Bypass", top: "58%", left: "10%", rot: 4, size: "w-62 h-46", image: "/ref/8.png" },
 { label: "No Rollback", top: "52%", right: "4%", rot: -5, size: "w-54 h-54", image: "/ref/9.png" },
 { label: "Code Injection", top: "72%", left: "6%", rot: -3, size: "w-50 h-42", image: "/ref/10.png" },
-{ label: "Race Conditions", top: "78%", left: "28%", rot: 2, size: "w-62 h-50", image: "/ref/race-conditions.png" },
-{ label: "Memory Leaks", top: "68%", right: "15%", rot: 4, size: "w-58 h-42", image: "/ref/memory-leaks.png" },
-{ label: "Privilege Escalation", top: "88%", left: "18%", rot: -2, size: "w-50 h-50", image: "/ref/privilege-escalation.png" },
-{ label: "Irreversible Damage", top: "85%", right: "28%", rot: 3, size: "w-66 h-46", image: "/ref/irreversible-damage.png" },
-{ label: "Zero Accountability", top: "92%", right: "8%", rot: -4, size: "w-54 h-42", image: "/ref/zero-accountability.png" },
+{ label: "Race Conditions", top: "78%", left: "28%", rot: 2, size: "w-62 h-50", image: "/ref/11.png" },
+{ label: "Memory Leaks", top: "68%", right: "15%", rot: 4, size: "w-58 h-42", image: "/ref/12.png" },
+{ label: "Privilege Escalation", top: "88%", left: "18%", rot: -2, size: "w-50 h-50", image: "/ref/13.png" },
+{ label: "Irreversible Damage", top: "85%", right: "28%", rot: 3, size: "w-66 h-46", image: "/ref/14.png" },
+{ label: "Zero Accountability", top: "92%", right: "8%", rot: -4, size: "w-54 h-42", image: "/ref/15.png" },
 ];
 
 export default function HomePage() {
