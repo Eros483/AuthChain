@@ -8,7 +8,7 @@ COPY services/blockchain_service/go.mod services/blockchain_service/go.sum ./
 RUN go mod download
 
 COPY . .
-
+RUN pwd && ls -R
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -o authchain ./services/blockchain_service/cmd/server.go
 
