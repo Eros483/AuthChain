@@ -5,8 +5,7 @@
 
 ## Table of Contents
 - [Description](#description)
-- [Getting Started](#getting-started)
-- [Usage](#usage)
+- [Getting Started and local usage](#getting-started-for-local-usage)
 - [Repository Structure](#repository-structure)
 - [LLM Usage Notes](#llm-usage-notes)
 - [Further Documentation](#further-documentation)
@@ -22,7 +21,9 @@ We achieve this by routing critical tool execution through a blockchain pipeline
 
 AuthChain seeks to allow execution of such tasks while allowing the Agent to log requests for permission for security-sensitive tasks. This allows us to leverage AI automation, while retain control.
 
-## Getting Started
+## Getting Started for local usage
+
+### Repository Setup
 - Clone repository as suitable into local drive.
 ```
 git clone https://github.com/Eros483/AuthChain.git
@@ -30,6 +31,7 @@ cd AuthChain
 cp .env.example .env
 cd frontend
 npm install
+cd ..
 ```
 - Conduct installations in your preferred environment manager (Ex: conda, uv, poetry, etc)
 ```
@@ -40,11 +42,17 @@ pip install -r requirements.txt
 - Set your Gemini API key in your `.env`.
   - **Note**: `ollama` or  a suitable LLM provider can be utilised for the project, refer to the [LLM Usage Notes](#llm-usage-notes) section.
 
-## Usage
-TODO
-- From base directory.
+### Local Usage
+All operations are to be executed from base directory, and in seperate terminals.
+
+- Backend API server, built with Uvicorn and FastAPI
 ```
 python -m backend.main
+```
+- Frontend server, built with Node and React
+```
+cd frontend
+npm run dev
 ```
 
 ## Repository Structure
