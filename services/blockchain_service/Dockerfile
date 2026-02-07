@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN apk add --no-cache ca-certificates
 
-COPY go.mod go.sum ./
+COPY services/blockchain_service/go.mod services/blockchain_service/go.sum ./
 RUN go mod download
 
 COPY . .
