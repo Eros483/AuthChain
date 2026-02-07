@@ -13,10 +13,12 @@ from services.ai_service.main import run_agent_interactive, resume_after_approva
 from typing import Dict, Optional, List
 import asyncio
 from datetime import datetime
+import traceback
+import sys
 
 from backend.utils.logger import get_logger
 
-logger=get_logger(__name__)
+logger = get_logger(__name__)
 
 BLOCKCHAIN_URL = "http://localhost:8081/api"
 
@@ -24,36 +26,49 @@ router = APIRouter()
 
 pending_approvals: Dict[str, CriticalActionProposal] = {}
 approval_decisions: Dict[str, UserApprovalRequest] = {}
-execution_status: Dict[str, str] = {}  # Track execution status
-agent_responses: Dict[str, dict] = {}  # Store agent outputs
+execution_status: Dict[str, str] = {}
+agent_responses: Dict[str, dict] = {}
 
 def run_agent_background(query: str, thread_id: str):
     """
     Background task to run agent without blocking API response.
-    Captures the agent's final output.
+    Captures the agent's final output with enhanced error handling.
     """
     try:
+        logger.info(f"[BACKGROUND START] Thread {thread_id}")
+        logger.info(f"[BACKGROUND] Query: {query}")
         execution_status[thread_id] = "RUNNING"
+        
+        # Call the agent
+        logger.info(f"[BACKGROUND] Calling run_agent_interactive...")
         actual_thread_id, status, output = run_agent_interactive(query, thread_id)
+        
+        logger.info(f"[BACKGROUND] Agent returned with status: {status}")
         execution_status[thread_id] = status
         
-        # Store the final response from the agent
-        # This will be accessible via the /agent/response endpoint
+        # Store the final response
         agent_responses[thread_id] = {
             "status": status,
             "completed_at": datetime.now().isoformat(),
             "thread_id": actual_thread_id,
-            "output": output  # Contains messages, tool_calls, nodes_visited, summary
+            "output": output
         }
         
+        logger.info(f"[BACKGROUND COMPLETE] Thread {thread_id} - Status: {status}")
+        
     except Exception as e:
+        error_trace = traceback.format_exc()
+        logger.error(f"[BACKGROUND ERROR] Thread {thread_id}")
+        logger.error(f"Error: {str(e)}")
+        logger.error(f"Traceback:\n{error_trace}")
+        
         execution_status[thread_id] = f"ERROR: {str(e)}"
         agent_responses[thread_id] = {
             "status": "ERROR",
             "error": str(e),
+            "traceback": error_trace,
             "completed_at": datetime.now().isoformat()
         }
-        logger.info(f"[BACKGROUND ERROR] {e}")
 
 @router.post("/agent/execute", response_model=AgentStatusResponse)
 async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundTasks):
@@ -64,10 +79,15 @@ async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundT
     import uuid
     thread_id = str(uuid.uuid4())
     
+    logger.info(f"[API] Received execution request for thread {thread_id}")
+    logger.info(f"[API] Query: {request.query}")
+    
     # Start agent in background
     background_tasks.add_task(run_agent_background, request.query, thread_id)
     
     execution_status[thread_id] = "RUNNING"
+    
+    logger.info(f"[API] Background task added for thread {thread_id}")
     
     return AgentStatusResponse(
         thread_id=thread_id,
@@ -110,13 +130,6 @@ async def get_agent_status(thread_id: str):
 async def get_agent_response(thread_id: str):
     """
     Get the agent's final output/response after execution completes.
-    
-    This endpoint returns:
-    - The final status (COMPLETED, ERROR, AWAITING_APPROVAL)
-    - Any output messages from the agent
-    - Timestamp of completion
-    
-    Use this to retrieve results after polling /agent/status shows COMPLETED.
     """
     if thread_id not in agent_responses and thread_id not in execution_status:
         raise HTTPException(status_code=404, detail="Thread ID not found")
@@ -135,7 +148,6 @@ async def get_agent_response(thread_id: str):
 async def get_critical_action(thread_id: str):
     """
     Blockchain calls this to retrieve critical action details.
-    Frontend also calls this to display to user.
     """
     if thread_id not in pending_approvals:
         raise HTTPException(status_code=404, detail="No pending action for this thread")
@@ -146,42 +158,47 @@ async def get_critical_action(thread_id: str):
 async def submit_critical_action(proposal: CriticalActionProposal):
     """
     AI service calls this when critical tool is triggered.
-    Stores the proposal for blockchain/frontend to retrieve.
     """
-    # sending proposal to blockchain
-    resp = requests.post(
-        BLOCKCHAIN_URL + "/actions",
-        json={
-            "proposal_id": proposal.thread_id,
-            "checkpoint_id": proposal.thread_id,
-            "tool_name": proposal.tool_name,
-            "tool_arguments": proposal.tool_arguments,
-            "reasoning_summary": proposal.reasoning_summary, 
-        },
-        timeout=3,
-    )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Blockchain rejected proposal")
-    result = resp.json()
+    try:
+        resp = requests.post(
+            BLOCKCHAIN_URL + "/actions",
+            json={
+                "proposal_id": proposal.thread_id,
+                "checkpoint_id": proposal.thread_id,
+                "tool_name": proposal.tool_name,
+                "tool_arguments": proposal.tool_arguments,
+                "reasoning_summary": proposal.reasoning_summary,
+            },
+            timeout=3,
+        )
+        if resp.status_code != 200:
+            logger.warning(f"Blockchain rejected proposal: {resp.status_code}")
+            raise HTTPException(status_code=500, detail="Blockchain rejected proposal")
+        result = resp.json()
 
-    if result.get("critical"):
+        if result.get("critical"):
+            pending_approvals[proposal.thread_id] = proposal
+            execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
+        else:
+            execution_status[proposal.thread_id] = "RUNNING"
+
+        return {"status": "stored", "thread_id": proposal.thread_id}
+    
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to connect to blockchain: {e}")
+        # Continue anyway - don't block on blockchain failure
         pending_approvals[proposal.thread_id] = proposal
         execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
-    else:
-        execution_status[proposal.thread_id] = "RUNNING"
-
-    return {"status": "stored", "thread_id": proposal.thread_id}
+        return {"status": "stored_no_blockchain", "thread_id": proposal.thread_id}
 
 @router.post("/blockchain/approve")
 async def blockchain_approval(request: BlockchainApprovalRequest):
     """
     Blockchain posts here after processing critical action.
-    This sends it to frontend for final user decision.
     """
     if request.thread_id not in pending_approvals:
         raise HTTPException(status_code=404, detail="Thread not found")
     
-    # Update pending approval with blockchain verification
     pending_approvals[request.thread_id] = CriticalActionProposal(
         thread_id=request.thread_id,
         tool_name=request.tool_name,
@@ -196,39 +213,44 @@ async def blockchain_approval(request: BlockchainApprovalRequest):
 async def user_approval(request: UserApprovalRequest, background_tasks: BackgroundTasks):
     """
     Frontend posts user's approval/rejection decision here.
-    Both blockchain and AI service read from this.
     """
     if request.thread_id not in pending_approvals:
         raise HTTPException(status_code=404, detail="Thread not found")
     
     proposal = pending_approvals[request.thread_id]
-    resp = requests.post(
-        BLOCKCHAIN_URL + "/blocks",
-        json={
-            "proposal_id": request.thread_id,
-            "checkpoint_id": request.thread_id,
-            "tool_name": proposal.tool_name,
-            "tool_arguments": proposal.tool_arguments,
-            "reasoning_summary": proposal.reasoning_summary,
-            "decision": {
-                "approved": request.approved,
-                "decision_by": "user",
-                "rejection_reason": request.reasoning,
+    
+    try:
+        resp = requests.post(
+            BLOCKCHAIN_URL + "/blocks",
+            json={
+                "proposal_id": request.thread_id,
+                "checkpoint_id": request.thread_id,
+                "tool_name": proposal.tool_name,
+                "tool_arguments": proposal.tool_arguments,
+                "reasoning_summary": proposal.reasoning_summary,
+                "decision": {
+                    "approved": request.approved,
+                    "decision_by": "user",
+                    "rejection_reason": request.reasoning,
+                    "timestamp": int(datetime.now().timestamp()),
+                },
                 "timestamp": int(datetime.now().timestamp()),
             },
-            "timestamp": int(datetime.now().timestamp()),
-        },
-        timeout=5,
-    )
-    if resp.status_code not in (200, 201, 202):
-        raise HTTPException(status_code=500, detail="Blockchain failed to record decision")
-
+            timeout=5,
+        )
+        if resp.status_code not in (200, 201, 202):
+            logger.warning(f"Blockchain failed to record decision: {resp.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to connect to blockchain: {e}")
+        # Continue anyway
+    
     # Store decision
     approval_decisions[request.thread_id] = request
     
     # Resume agent execution in background
     def resume_background():
         try:
+            logger.info(f"[RESUME] Starting for thread {request.thread_id}")
             output = resume_after_approval(
                 request.thread_id,
                 request.approved,
@@ -236,7 +258,6 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
             )
             execution_status[request.thread_id] = "COMPLETED"
             
-            # Store final response
             agent_responses[request.thread_id] = {
                 "status": "COMPLETED",
                 "approved": request.approved,
@@ -244,18 +265,23 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
                 "output": output
             }
             
-            # Cleanup
             if request.thread_id in pending_approvals:
                 del pending_approvals[request.thread_id]
+            
+            logger.info(f"[RESUME COMPLETE] Thread {request.thread_id}")
                 
         except Exception as e:
+            error_trace = traceback.format_exc()
+            logger.error(f"[RESUME ERROR] Thread {request.thread_id}: {e}")
+            logger.error(f"Traceback:\n{error_trace}")
+            
             execution_status[request.thread_id] = f"ERROR: {str(e)}"
             agent_responses[request.thread_id] = {
                 "status": "ERROR",
                 "error": str(e),
+                "traceback": error_trace,
                 "completed_at": datetime.now().isoformat()
             }
-            logger.info(f"[RESUME ERROR] {e}")
     
     background_tasks.add_task(resume_background)
     
