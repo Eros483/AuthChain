@@ -25,7 +25,7 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-BLOCKCHAIN_URL = "https://authchaingo.onrender.com//api"
+BLOCKCHAIN_URL = "https://authchaingo.onrender.com/api"
 
 router = APIRouter()
 
@@ -148,14 +148,45 @@ async def get_critical_action(thread_id: str):
     
     return pending_approvals[thread_id]
 
+# @router.post("/critical-action/submit")
+# async def submit_critical_action(proposal: CriticalActionProposal):
+#     """
+#     AI service calls this when critical tool is triggered.
+#     """
+#     try:
+#         resp = requests.post(
+#             BLOCKCHAIN_URL + "/actions",
+#             json={
+#                 "proposal_id": proposal.thread_id,
+#                 "checkpoint_id": proposal.thread_id,
+#                 "tool_name": proposal.tool_name,
+#                 "tool_arguments": proposal.tool_arguments,
+#                 "reasoning_summary": proposal.reasoning_summary,
+#             },
+#             timeout=3,
+#         )
+#         if resp.status_code != 200:
+#             logger.warning(f"Blockchain rejected proposal: {resp.status_code}")
+#     except requests.exceptions.RequestException as e:
+#         logger.error(f"Failed to connect to blockchain: {e}")
+#         # Continue anyway
+    
+#     # Store in shared state
+#     pending_approvals[proposal.thread_id] = proposal
+#     execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
+    
+#     return {"status": "stored", "thread_id": proposal.thread_id}
 @router.post("/critical-action/submit")
 async def submit_critical_action(proposal: CriticalActionProposal):
     """
     AI service calls this when critical tool is triggered.
+    Blockchain is authoritative. Failure blocks execution.
     """
     try:
+        logger.info(f"[GOVERNANCE] Submitting proposal {proposal.thread_id} to blockchain")
+
         resp = requests.post(
-            BLOCKCHAIN_URL + "/actions",
+            f"{BLOCKCHAIN_URL}/actions",
             json={
                 "proposal_id": proposal.thread_id,
                 "checkpoint_id": proposal.thread_id,
@@ -163,19 +194,38 @@ async def submit_critical_action(proposal: CriticalActionProposal):
                 "tool_arguments": proposal.tool_arguments,
                 "reasoning_summary": proposal.reasoning_summary,
             },
-            timeout=3,
+            timeout=5,
         )
+
         if resp.status_code != 200:
-            logger.warning(f"Blockchain rejected proposal: {resp.status_code}")
+            logger.error(f"[GOVERNANCE] Blockchain rejected proposal {proposal.thread_id}")
+            execution_status[proposal.thread_id] = "BLOCKED"
+            raise HTTPException(
+                status_code=503,
+                detail="Blockchain rejected governance request. Execution blocked."
+            )
+
+        result = resp.json()
+
+        if not result.get("critical"):
+            logger.info(f"[GOVERNANCE] Action non-critical. Continuing execution.")
+            execution_status[proposal.thread_id] = "RUNNING"
+            return {"status": "non_critical"}
+
+        pending_approvals[proposal.thread_id] = proposal
+        execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
+
+        logger.info(f"[GOVERNANCE] Proposal {proposal.thread_id} awaiting approval")
+        return {"status": "awaiting_approval", "thread_id": proposal.thread_id}
+
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to connect to blockchain: {e}")
-        # Continue anyway
-    
-    # Store in shared state
-    pending_approvals[proposal.thread_id] = proposal
-    execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
-    
-    return {"status": "stored", "thread_id": proposal.thread_id}
+        logger.critical(f"[GOVERNANCE DOWN] Cannot reach blockchain: {e}")
+
+        execution_status[proposal.thread_id] = "BLOCKED"
+        raise HTTPException(
+            status_code=503,
+            detail="Blockchain unavailable. Critical execution blocked."
+        )
 
 @router.post("/blockchain/approve")
 async def blockchain_approval(request: BlockchainApprovalRequest):
