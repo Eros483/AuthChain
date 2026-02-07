@@ -1,4 +1,5 @@
 langchain-google-genai
+langchain-openai
 langgraph
 python-dotenv
 langchain-core
