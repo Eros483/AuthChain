@@ -1,18 +1,25 @@
 # -----  Main Agent Runner @ services/ai_service/main.py -----
 
 import uuid
-import requests
 from datetime import datetime
 from langchain_core.messages import HumanMessage
 
 from services.ai_service.agent.graph import graph
 from services.ai_service.agent.prompts import format_rejection_message
 
-API_BASE_URL = "http://localhost:8000/api/v1"
+try:
+    from backend.api.endpoints import pending_approvals, execution_status
+    STANDALONE_MODE = False
+except ImportError:
+    # Running standalone without API
+    STANDALONE_MODE = True
+    pending_approvals = {}
+    execution_status = {}
 
 def run_agent_interactive(user_query: str, thread_id: str = None):
     """
     Runs the agent with interactive approval flow and enhanced observability.
+    When running inside FastAPI, directly updates shared state instead of HTTP calls.
     """
     thread_id = thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
@@ -21,6 +28,7 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
     print("AGENT SESSION STARTING")
     print(f"Session ID: {thread_id}")
     print(f"User Query: {user_query}")
+    print(f"Mode: {'Standalone' if STANDALONE_MODE else 'API Integrated'}")
     print("=" * 80)
     
     tool_calls_made = 0
@@ -48,9 +56,8 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         print(f"\n[NODE: {current_node}] ({msg_type})")
         print("-" * 80)
         
-        # FIX: Handle content being a list or string
+        # Handle AI message content
         if hasattr(last_msg, 'content') and last_msg.content and msg_type == "AIMessage":
-            # Content can be string or list
             if isinstance(last_msg.content, str):
                 content_preview = last_msg.content[:500]
                 if len(last_msg.content) > 500:
@@ -91,7 +98,6 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         
         # Display tool results
         if msg_type == "ToolMessage":
-            # FIX: Handle content being a list or string
             if isinstance(last_msg.content, str):
                 result_preview = last_msg.content[:300]
                 if len(last_msg.content) > 300:
@@ -117,41 +123,72 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
     
     state = graph.get_state(config)
     
+    # Check if we hit a critical action checkpoint
     if state.next and "execute_critical" in state.next:
         print("\n" + "=" * 80)
-        print("CRITICAL ACTION DETECTED - SUBMITTING TO API")
+        print("CRITICAL ACTION DETECTED")
         print("=" * 80)
         
-        payload = {
-            "thread_id": thread_id,
-            "tool_name": state.values["pending_critical_tool"]["name"],
-            "tool_arguments": state.values["pending_critical_tool"]["args"],
-            "reasoning_summary": state.values.get("reasoning_summary", ""),
-            "timestamp": datetime.now().isoformat()
-        }
+        pending_tool = state.values["pending_critical_tool"]
+        reasoning = state.values.get("reasoning_summary", "")
         
         print(f"\nPending Critical Action:")
-        print(f"  Tool: {payload['tool_name']}")
-        print(f"  Arguments: {payload['tool_arguments']}")
+        print(f"  Tool: {pending_tool['name']}")
+        print(f"  Arguments: {pending_tool['args']}")
         print(f"\nReasoning:")
-        print(f"  {payload['reasoning_summary']}")
+        print(f"  {reasoning}")
         
-        try:
-            response = requests.post(
-                f"{API_BASE_URL}/critical-action/submit",
-                json=payload
+        if not STANDALONE_MODE:
+            # Running inside FastAPI - store in shared state
+            from backend.api.models import CriticalActionProposal
+            
+            proposal = CriticalActionProposal(
+                thread_id=thread_id,
+                tool_name=pending_tool["name"],
+                tool_arguments=pending_tool["args"],
+                reasoning_summary=reasoning,
+                timestamp=datetime.now().isoformat()
             )
-            response.raise_for_status()
-            print(f"\n✅ Critical action submitted to API")
-            print(f"   Blockchain can retrieve at: GET /api/v1/critical-action/{thread_id}")
-            print(f"   Frontend can retrieve at: GET /api/v1/critical-action/{thread_id}")
-        except Exception as e:
-            print(f"\n❌ Failed to submit to API: {e}")
+            
+            # Directly update shared dictionaries (no HTTP call needed)
+            pending_approvals[thread_id] = proposal
+            execution_status[thread_id] = "AWAITING_APPROVAL"
+            
+            print(f"\n✅ Critical action stored in shared state")
+            print(f"   Frontend can retrieve via: GET /api/v1/critical-action/{thread_id}")
+            
+            # Also try to notify blockchain (optional - don't fail if it's down)
+            try:
+                import requests
+                BLOCKCHAIN_URL = "http://localhost:8081/api"
+                requests.post(
+                    f"{BLOCKCHAIN_URL}/actions",
+                    json={
+                        "proposal_id": thread_id,
+                        "checkpoint_id": thread_id,
+                        "tool_name": pending_tool["name"],
+                        "tool_arguments": pending_tool["args"],
+                        "reasoning_summary": reasoning,
+                    },
+                    timeout=3,
+                )
+                print(f"   ✅ Blockchain notified")
+            except Exception as e:
+                print(f"   ⚠️  Blockchain notification failed (non-critical): {e}")
+        else:
+            # Standalone mode - just log it
+            print(f"\n⚠️  Running in standalone mode - no API integration")
+            print(f"   In production, this would be stored for approval")
         
         return thread_id, "AWAITING_APPROVAL", {
             "messages": agent_messages,
             "tool_calls": tool_calls_made,
-            "nodes_visited": nodes_visited
+            "nodes_visited": nodes_visited,
+            "pending_action": {
+                "tool": pending_tool["name"],
+                "args": pending_tool["args"],
+                "reasoning": reasoning
+            }
         }
     
     print("\n" + "=" * 80)
@@ -189,7 +226,6 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
             
             print(f"\n[{msg_type}]")
             
-            # FIX: Handle content being a list or string
             if hasattr(last_msg, 'content') and last_msg.content:
                 if isinstance(last_msg.content, str):
                     content_preview = last_msg.content[:500]
@@ -240,7 +276,6 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
             
             print(f"\n[{msg_type}]")
             
-            # FIX: Handle content being a list or string
             if hasattr(last_msg, 'content') and last_msg.content:
                 if isinstance(last_msg.content, str):
                     print(f"{last_msg.content}")
@@ -268,7 +303,6 @@ if __name__ == "__main__":
     
     # Check if we're resuming or starting fresh
     if len(sys.argv) > 1 and sys.argv[1] == "--resume":
-        # Resume mode: python -m services.ai_service.main --resume <thread_id> <approved> [reason]
         thread_id = sys.argv[2]
         approved = sys.argv[3].lower() == "true"
         rejection_reason = sys.argv[4] if len(sys.argv) > 4 else "No reason provided"
