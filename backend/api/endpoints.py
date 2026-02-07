@@ -10,11 +10,16 @@ from backend.api.models import (
     AgentStatusResponse
 )
 from services.ai_service.main import run_agent_interactive, resume_after_approval
+from backend.api.shared_state import (
+    pending_approvals,
+    approval_decisions,
+    execution_status,
+    agent_responses
+)
 from typing import Dict, Optional, List
 import asyncio
 from datetime import datetime
 import traceback
-import sys
 
 from backend.utils.logger import get_logger
 
@@ -24,29 +29,21 @@ BLOCKCHAIN_URL = "http://localhost:8081/api"
 
 router = APIRouter()
 
-pending_approvals: Dict[str, CriticalActionProposal] = {}
-approval_decisions: Dict[str, UserApprovalRequest] = {}
-execution_status: Dict[str, str] = {}
-agent_responses: Dict[str, dict] = {}
-
 def run_agent_background(query: str, thread_id: str):
     """
     Background task to run agent without blocking API response.
-    Captures the agent's final output with enhanced error handling.
     """
     try:
         logger.info(f"[BACKGROUND START] Thread {thread_id}")
         logger.info(f"[BACKGROUND] Query: {query}")
         execution_status[thread_id] = "RUNNING"
         
-        # Call the agent
         logger.info(f"[BACKGROUND] Calling run_agent_interactive...")
         actual_thread_id, status, output = run_agent_interactive(query, thread_id)
         
         logger.info(f"[BACKGROUND] Agent returned with status: {status}")
         execution_status[thread_id] = status
         
-        # Store the final response
         agent_responses[thread_id] = {
             "status": status,
             "completed_at": datetime.now().isoformat(),
@@ -74,7 +71,6 @@ def run_agent_background(query: str, thread_id: str):
 async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundTasks):
     """
     Frontend sends user query to execute agent.
-    Returns thread_id immediately and runs agent in background.
     """
     import uuid
     thread_id = str(uuid.uuid4())
@@ -82,7 +78,6 @@ async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundT
     logger.info(f"[API] Received execution request for thread {thread_id}")
     logger.info(f"[API] Query: {request.query}")
     
-    # Start agent in background
     background_tasks.add_task(run_agent_background, request.query, thread_id)
     
     execution_status[thread_id] = "RUNNING"
@@ -137,7 +132,6 @@ async def get_agent_response(thread_id: str):
     if thread_id in agent_responses:
         return agent_responses[thread_id]
     
-    # Still running
     return {
         "thread_id": thread_id,
         "status": execution_status.get(thread_id, "UNKNOWN"),
@@ -173,23 +167,15 @@ async def submit_critical_action(proposal: CriticalActionProposal):
         )
         if resp.status_code != 200:
             logger.warning(f"Blockchain rejected proposal: {resp.status_code}")
-            raise HTTPException(status_code=500, detail="Blockchain rejected proposal")
-        result = resp.json()
-
-        if result.get("critical"):
-            pending_approvals[proposal.thread_id] = proposal
-            execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
-        else:
-            execution_status[proposal.thread_id] = "RUNNING"
-
-        return {"status": "stored", "thread_id": proposal.thread_id}
-    
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to connect to blockchain: {e}")
-        # Continue anyway - don't block on blockchain failure
-        pending_approvals[proposal.thread_id] = proposal
-        execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
-        return {"status": "stored_no_blockchain", "thread_id": proposal.thread_id}
+        # Continue anyway
+    
+    # Store in shared state
+    pending_approvals[proposal.thread_id] = proposal
+    execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
+    
+    return {"status": "stored", "thread_id": proposal.thread_id}
 
 @router.post("/blockchain/approve")
 async def blockchain_approval(request: BlockchainApprovalRequest):
@@ -242,12 +228,9 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
             logger.warning(f"Blockchain failed to record decision: {resp.status_code}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to connect to blockchain: {e}")
-        # Continue anyway
     
-    # Store decision
     approval_decisions[request.thread_id] = request
     
-    # Resume agent execution in background
     def resume_background():
         try:
             logger.info(f"[RESUME] Starting for thread {request.thread_id}")

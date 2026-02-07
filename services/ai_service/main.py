@@ -6,20 +6,15 @@ from langchain_core.messages import HumanMessage
 
 from services.ai_service.agent.graph import graph
 from services.ai_service.agent.prompts import format_rejection_message
+from backend.api.models import CriticalActionProposal
 
-try:
-    from backend.api.endpoints import pending_approvals, execution_status
-    STANDALONE_MODE = False
-except ImportError:
-    # Running standalone without API
-    STANDALONE_MODE = True
-    pending_approvals = {}
-    execution_status = {}
+# Import shared state (this won't cause circular import now)
+from backend.api.shared_state import pending_approvals, execution_status
 
 def run_agent_interactive(user_query: str, thread_id: str = None):
     """
-    Runs the agent with interactive approval flow and enhanced observability.
-    When running inside FastAPI, directly updates shared state instead of HTTP calls.
+    Runs the agent with interactive approval flow.
+    Stores critical actions directly in shared state.
     """
     thread_id = thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
@@ -28,7 +23,7 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
     print("AGENT SESSION STARTING")
     print(f"Session ID: {thread_id}")
     print(f"User Query: {user_query}")
-    print(f"Mode: {'Standalone' if STANDALONE_MODE else 'API Integrated'}")
+    print(f"Mode: API Integrated")
     print("=" * 80)
     
     tool_calls_made = 0
@@ -126,7 +121,7 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
     # Check if we hit a critical action checkpoint
     if state.next and "execute_critical" in state.next:
         print("\n" + "=" * 80)
-        print("CRITICAL ACTION DETECTED")
+        print("CRITICAL ACTION DETECTED - STORING IN SHARED STATE")
         print("=" * 80)
         
         pending_tool = state.values["pending_critical_tool"]
@@ -138,47 +133,40 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         print(f"\nReasoning:")
         print(f"  {reasoning}")
         
-        if not STANDALONE_MODE:
-            # Running inside FastAPI - store in shared state
-            from backend.api.models import CriticalActionProposal
-            
-            proposal = CriticalActionProposal(
-                thread_id=thread_id,
-                tool_name=pending_tool["name"],
-                tool_arguments=pending_tool["args"],
-                reasoning_summary=reasoning,
-                timestamp=datetime.now().isoformat()
+        # Create proposal and store in shared state
+        proposal = CriticalActionProposal(
+            thread_id=thread_id,
+            tool_name=pending_tool["name"],
+            tool_arguments=pending_tool["args"],
+            reasoning_summary=reasoning,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        # Directly update shared dictionaries (same process, no HTTP needed)
+        pending_approvals[thread_id] = proposal
+        execution_status[thread_id] = "AWAITING_APPROVAL"
+        
+        print(f"\n✅ Critical action stored in shared state")
+        print(f"   Frontend can retrieve via: GET /api/v1/critical-action/{thread_id}")
+        
+        # Optional blockchain notification (don't fail if it's down)
+        try:
+            import requests
+            BLOCKCHAIN_URL = "http://localhost:8081/api"
+            requests.post(
+                f"{BLOCKCHAIN_URL}/actions",
+                json={
+                    "proposal_id": thread_id,
+                    "checkpoint_id": thread_id,
+                    "tool_name": pending_tool["name"],
+                    "tool_arguments": pending_tool["args"],
+                    "reasoning_summary": reasoning,
+                },
+                timeout=3,
             )
-            
-            # Directly update shared dictionaries (no HTTP call needed)
-            pending_approvals[thread_id] = proposal
-            execution_status[thread_id] = "AWAITING_APPROVAL"
-            
-            print(f"\n✅ Critical action stored in shared state")
-            print(f"   Frontend can retrieve via: GET /api/v1/critical-action/{thread_id}")
-            
-            # Also try to notify blockchain (optional - don't fail if it's down)
-            try:
-                import requests
-                BLOCKCHAIN_URL = "http://localhost:8081/api"
-                requests.post(
-                    f"{BLOCKCHAIN_URL}/actions",
-                    json={
-                        "proposal_id": thread_id,
-                        "checkpoint_id": thread_id,
-                        "tool_name": pending_tool["name"],
-                        "tool_arguments": pending_tool["args"],
-                        "reasoning_summary": reasoning,
-                    },
-                    timeout=3,
-                )
-                print(f"   ✅ Blockchain notified")
-            except Exception as e:
-                print(f"   ⚠️  Blockchain notification failed (non-critical): {e}")
-        else:
-            # Standalone mode - just log it
-            print(f"\n⚠️  Running in standalone mode - no API integration")
-            print(f"   In production, this would be stored for approval")
+            print(f"   ✅ Blockchain notified")
+        except Exception as e:
+            print(f"   ⚠️  Blockchain notification failed (non-critical): {e}")
         
         return thread_id, "AWAITING_APPROVAL", {
             "messages": agent_messages,
