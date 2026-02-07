@@ -1,22 +1,37 @@
-# ----- main backend API entrypoint @ backend/main.py -----
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.api.endpoints import router as api_router
+from contextlib import asynccontextmanager
 import uvicorn
-from backend.utils.logger import get_logger
 
-logger=get_logger(__name__)
+from backend.utils.logger import get_logger
+from backend.utils.setup_sandbox import clean_environment, create_scaffolding, init_db
+
+logger = get_logger(__name__)
+
+logger.info("Pre-flight: Initializing Sandbox...")
+clean_environment()
+create_scaffolding()
+init_db()
+
+from backend.api.endpoints import router as api_router
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    logger.info("🚀 API Lifespan started")
+    yield
+    logger.info("🛑 API Lifespan shutting down")
 
 app = FastAPI(
     title="AuthChain AI Agent API",
-    description="Backend API for autonomous AI agent with human-in-the-loop approval",
-    version="1.0.0"
+    description="Backend API for autonomous AI agent",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,9 +49,5 @@ if __name__ == "__main__":
         "backend.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=False,
-        reload_excludes=[
-            "services/ai_service/sandbox",
-            "services/ai_service/sandbox/**",
-        ],
+        reload=False, 
     )

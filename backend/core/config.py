@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     LOCAL_MODEL_NAME: str = "llama3.1"
 
     GEMINI_API_KEY: str=os.getenv("GEMINI_API_KEY")
-    OPENROUTER_API_KEY: str=os.getenv("OPENROUTER_API_KEY")
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
