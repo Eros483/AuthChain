@@ -28,6 +28,8 @@ export default function ChatCanvas() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [criticalAction, setCriticalAction] = useState<CriticalAction | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pollerRef = useRef<NodeJS.Timeout | null>(null);
+  
   type ExecutionStage =
     | "ANALYZING"
     | "PLANNING"
@@ -49,60 +51,79 @@ export default function ChatCanvas() {
 
   useEffect(() => {
     if (!threadId) return;
-
-    const pollStatus = async () => {
+  
+    if (pollerRef.current) {
+      clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
+  
+    pollerRef.current = setInterval(async () => {
       try {
         const status = await getAgentStatus(threadId);
-
+      
         if (status.status === "AWAITING_APPROVAL") {
           const action = await getCriticalAction(threadId);
           setCriticalAction(action);
           setIsLoading(false);
-        } else if (status.status === "COMPLETED") {
+        
+          clearInterval(pollerRef.current!);
+          pollerRef.current = null;
+        }
+      
+        if (status.status === "COMPLETED") {
           const response = await getAgentResponse(threadId);
-
-          if (response.output?.messages) {
-            const aiMessages = response.output.messages.filter(
+        
+          const aiMessages =
+            response.output?.messages?.filter(
               (m: Message) => m.type === "ai_message" && m.content
-            );
-
-            if (aiMessages.length > 0) {
-              const lastMessage = aiMessages[aiMessages.length - 1];
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: Date.now().toString(),
-                  role: "ai",
-                  content: lastMessage.content || response.output?.summary || "Task completed",
-                  timestamp: lastMessage.timestamp,
-                },
-              ]);
-            }
+            ) ?? [];
+          
+          if (aiMessages.length) {
+            const last = aiMessages[aiMessages.length - 1];
+            setMessages(prev => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: "ai",
+                content: last.content!,
+                timestamp: last.timestamp,
+              },
+            ]);
           }
-
-          setIsLoading(false);
-          setThreadId(null);
-        } else if (status.status === "ERROR") {
-          setMessages((prev) => [
+        
+          cleanupPolling();
+        }
+      
+        if (status.status === "ERROR") {
+          setMessages(prev => [
             ...prev,
             {
-              id: Date.now().toString(),
+              id: crypto.randomUUID(),
               role: "ai",
-              content: "An error occurred during execution.",
+              content: "Execution failed.",
               timestamp: new Date().toISOString(),
             },
           ]);
-          setIsLoading(false);
-          setThreadId(null);
+        
+          cleanupPolling();
         }
-      } catch (error) {
-        console.error("Polling error:", error);
+      } catch (e) {
+        console.error(e);
+        cleanupPolling();
       }
-    };
-
-    const interval = setInterval(pollStatus, 5000);
-    return () => clearInterval(interval);
+    }, 3000);
+  
+    return cleanupPolling;
   }, [threadId]);
+  
+  const cleanupPolling = () => {
+    if (pollerRef.current) {
+      clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
+    setThreadId(null);
+    setIsLoading(false);
+  };
 
   const handleSendMessage = async (query: string) => {
     setCriticalAction(null);
@@ -139,29 +160,29 @@ export default function ChatCanvas() {
   };
 
   const handleApprovalResponse = (approved: boolean) => {
+    cleanupPolling();
     setCriticalAction(null);
 
     if (approved) {
-      setMessages((prev) => [
+      setMessages(prev => [
         ...prev,
         {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           role: "ai",
-          content: "Action approved. Continuing execution...",
+          content: "Approved. Executing authorized action…",
           timestamp: new Date().toISOString(),
         },
       ]);
     } else {
-      setMessages((prev) => [
+      setMessages(prev => [
         ...prev,
         {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           role: "ai",
-          content: "Action rejected. Task cancelled.",
+          content: "Action rejected. Execution stopped.",
           timestamp: new Date().toISOString(),
         },
       ]);
-      setThreadId(null);
     }
   };
 
