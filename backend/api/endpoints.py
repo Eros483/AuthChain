@@ -90,36 +90,64 @@ async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundT
         message="Agent execution started in background"
     )
 
+# @router.get("/agent/status/{thread_id}", response_model=AgentStatusResponse)
+# async def get_agent_status(thread_id: str):
+#     """
+#     Check if agent is waiting for approval or has completed.
+#     """
+#     if thread_id in pending_approvals:
+#         return AgentStatusResponse(
+#             thread_id=thread_id,
+#             status="AWAITING_APPROVAL",
+#             message="Critical action requires approval"
+#         )
+#     elif thread_id in approval_decisions:
+#         return AgentStatusResponse(
+#             thread_id=thread_id,
+#             status="COMPLETED",
+#             message="Execution resumed after approval decision"
+#         )
+#     elif thread_id in execution_status:
+#         status = execution_status[thread_id]
+#         return AgentStatusResponse(
+#             thread_id=thread_id,
+#             status=status,
+#             message=f"Current status: {status}"
+#         )
+#     else:
+#         return AgentStatusResponse(
+#             thread_id=thread_id,
+#             status="UNKNOWN",
+#             message="Thread ID not found"
+#         )
 @router.get("/agent/status/{thread_id}", response_model=AgentStatusResponse)
 async def get_agent_status(thread_id: str):
-    """
-    Check if agent is waiting for approval or has completed.
-    """
     if thread_id in pending_approvals:
         return AgentStatusResponse(
             thread_id=thread_id,
             status="AWAITING_APPROVAL",
             message="Critical action requires approval"
         )
-    elif thread_id in approval_decisions:
+
+    if thread_id in agent_responses:
         return AgentStatusResponse(
             thread_id=thread_id,
             status="COMPLETED",
-            message="Execution resumed after approval decision"
+            message="Execution completed"
         )
-    elif thread_id in execution_status:
-        status = execution_status[thread_id]
+
+    if thread_id in execution_status:
         return AgentStatusResponse(
             thread_id=thread_id,
-            status=status,
-            message=f"Current status: {status}"
+            status=execution_status[thread_id],
+            message=f"Current status: {execution_status[thread_id]}"
         )
-    else:
-        return AgentStatusResponse(
-            thread_id=thread_id,
-            status="UNKNOWN",
-            message="Thread ID not found"
-        )
+
+    return AgentStatusResponse(
+        thread_id=thread_id,
+        status="UNKNOWN",
+        message="Thread ID not found"
+    )
 
 @router.get("/agent/response/{thread_id}")
 async def get_agent_response(thread_id: str):
