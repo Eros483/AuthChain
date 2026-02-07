@@ -13,9 +13,12 @@ from typing import Dict, Optional, List
 import asyncio
 from datetime import datetime
 
+from backend.utils.logger import get_logger
+
+logger=get_logger(__name__)
+
 router = APIRouter()
 
-# In-memory storage for pending approvals (replace with Redis/DB in production)
 pending_approvals: Dict[str, CriticalActionProposal] = {}
 approval_decisions: Dict[str, UserApprovalRequest] = {}
 execution_status: Dict[str, str] = {}  # Track execution status
@@ -47,7 +50,7 @@ def run_agent_background(query: str, thread_id: str):
             "error": str(e),
             "completed_at": datetime.now().isoformat()
         }
-        print(f"[BACKGROUND ERROR] {e}")
+        logger.info(f"[BACKGROUND ERROR] {e}")
 
 @router.post("/agent/execute", response_model=AgentStatusResponse)
 async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundTasks):
@@ -207,7 +210,7 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
                 "error": str(e),
                 "completed_at": datetime.now().isoformat()
             }
-            print(f"[RESUME ERROR] {e}")
+            logger.info(f"[RESUME ERROR] {e}")
     
     background_tasks.add_task(resume_background)
     

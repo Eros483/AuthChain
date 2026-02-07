@@ -3,12 +3,15 @@
 import os
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
+from backend.utils.logger import get_logger
+
+logger=get_logger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX_PATH = os.path.join(BASE_DIR, "sandbox")
 DB_PATH = os.path.join(SANDBOX_PATH, "task_tracker.db")
 
-print(f"🔌 AGENT CONNECTING TO DB AT: {DB_PATH}")
+logger.info(f"🔌 AGENT CONNECTING TO DB AT: {DB_PATH}")
 
 db = SQLDatabase.from_uri(
     f"sqlite:///{DB_PATH}",

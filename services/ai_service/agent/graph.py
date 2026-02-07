@@ -82,7 +82,7 @@ def call_model(state: AgentState):
         for i, tc in enumerate(response.tool_calls):
             tc_signature = (tc['name'], json.dumps(tc['args'], sort_keys=True))
             if tc_signature in seen:
-                print(f"\n[DEBUG] Duplicate tool call detected: {tc['name']} (call #{i+1} matches call #{seen[tc_signature]+1})")
+                logger.info(f"\n[DEBUG] Duplicate tool call detected: {tc['name']} (call #{i+1} matches call #{seen[tc_signature]+1})")
             else:
                 seen[tc_signature] = i
     
@@ -103,7 +103,7 @@ def route_tools(state: AgentState) -> Literal["safe_tools", "critical_gate", "en
         
         # Check for critical tools
         if any(is_critical(tc["name"]) for tc in last_msg.tool_calls):
-            print("[ROUTER] Routing to: critical_gate")
+            logger.info("[ROUTER] Routing to: critical_gate")
             return "critical_gate"
         
         print("[ROUTER] Routing to: safe_tools")
@@ -113,7 +113,7 @@ def route_tools(state: AgentState) -> Literal["safe_tools", "critical_gate", "en
     if hasattr(last_msg, 'content') and last_msg.content:
         content_lower = last_msg.content.lower()
         if "task completed" in content_lower or "task complete" in content_lower:
-            print("[ROUTER] Routing to: end (task completion detected)")
+            logger.info("[ROUTER] Routing to: end (task completion detected)")
             return "end"
 
     print("[ROUTER] Routing to: end (no tools, no completion signal)")
@@ -158,8 +158,6 @@ def critical_gate(state: AgentState):
         "pending_critical_tool": tool_call
     }
 
-
-# Build workflow graph
 workflow = StateGraph(AgentState)
 
 workflow.add_node("agent", call_model)
@@ -183,7 +181,6 @@ workflow.add_edge("safe_tools", "agent")
 workflow.add_edge("critical_gate", "execute_critical")
 workflow.add_edge("execute_critical", "agent")
 
-# Configure persistence
 db_path = "./services/ai_service/sandbox/checkpoints.sqlite"
 conn = sqlite3.connect(db_path, check_same_thread=False)
 checkpointer = SqliteSaver(conn)

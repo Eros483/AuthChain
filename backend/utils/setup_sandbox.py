@@ -38,7 +38,6 @@ def create_scaffolding():
             
     logger.info(f"📂 Directories and files created in {SANDBOX_ROOT}")
 
-    # [FIX] Initialize Git Repo so agent git tools work
     try:
         subprocess.run(["git", "init"], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
         subprocess.run(["git", "add", "."], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
@@ -47,11 +46,12 @@ def create_scaffolding():
     except Exception as e:
         logger.warning(f"⚠️ Warning: Could not initialize git: {e}")
 def init_db():
-    """Initializes the database with schema and seed data."""
+    """
+    Initializes the database with schema and seed data.
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. Create Projects Table (Using the more robust schema from Script 1)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS projects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +61,6 @@ def init_db():
     );
     """)
 
-    # 2. Create Secrets Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS secrets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,10 +69,8 @@ def init_db():
     );
     """)
 
-    # 3. Seed Data (Using data from Script 2)
     logger.info("Seeding database with initial data...")
     
-    # Note: We let 'created_at' auto-generate
     projects_data = [
         ('AuthChain Core', 'active'),
         ('Legacy Migration', 'deprecated'),
@@ -89,7 +86,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    logger.info(f"✅ Database initialized at {DB_PATH}")
+    logger.info(f"Database initialized at {DB_PATH}")
 
 if __name__ == "__main__":
     logger.info("Initializing Sandbox Environment...")
