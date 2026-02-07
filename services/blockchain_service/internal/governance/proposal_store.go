@@ -7,15 +7,16 @@ import (
 )
 
 type Proposal struct {
-	ProposalID       string
-	CheckpointID     string
-	ToolName         string
-	ToolArguments    map[string]interface{}
-	ReasoningSummary string
-	Status           string
-	DecisionBy       string
-	CreatedAt        time.Time
-	ResolvedAt       *time.Time
+	ProposalID         string
+	CheckpointID       string
+	ToolName           string
+	RequiredValidators []string
+	ToolArguments      map[string]interface{}
+	ReasoningSummary   string
+	Status             string
+	DecisionBy         string
+	CreatedAt          time.Time
+	ResolvedAt         *time.Time
 }
 
 type ProposalStore struct {

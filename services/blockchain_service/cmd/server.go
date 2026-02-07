@@ -16,13 +16,15 @@ func main() {
 	proposalStore := governance.NewProposalStore()
 	toolRegistry := governance.NewToolRegistry()
 
+	ownerRegistry := governance.NewDirectoryOwnerRegistry()
+
 	log.Println("AuthChain Blockchain Service Starting")
 
-	if err := os.MkdirAll("./services/blockchain_service/data", 0755); err != nil {
+	if err := os.MkdirAll("./data", 0755); err != nil {
 		log.Fatal("Failed to create data directory:", err)
 	}
 
-	blockchain, err := chain.LoadFromFile("./services/blockchain_service/data/blockchain.json")
+	blockchain, err := chain.LoadFromFile("./data/blockchain.json")
 	if err != nil {
 		log.Printf("Creating new blockchain: %v", err)
 		blockchain = chain.NewBlockchain()
@@ -38,10 +40,12 @@ func main() {
 	handler := api.NewHandler(
 		proposalStore,
 		toolRegistry,
+		ownerRegistry,
 		blockchain,
 		quorumConsensus,
 		validatorRegistry,
 	)
+
 	router := api.SetupRouter(handler)
 
 	log.Println("Port: 8081")

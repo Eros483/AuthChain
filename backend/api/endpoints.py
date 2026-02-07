@@ -1,6 +1,7 @@
 # ----- endpoint management for API @ backend/api/endpoints.py -----
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+import requests
 from backend.api.models import (
     UserQueryRequest,
     CriticalActionProposal,
@@ -16,6 +17,8 @@ from datetime import datetime
 from backend.utils.logger import get_logger
 
 logger=get_logger(__name__)
+
+BLOCKCHAIN_URL = "http://localhost:8081/api"
 
 router = APIRouter()
 
@@ -145,8 +148,28 @@ async def submit_critical_action(proposal: CriticalActionProposal):
     AI service calls this when critical tool is triggered.
     Stores the proposal for blockchain/frontend to retrieve.
     """
-    pending_approvals[proposal.thread_id] = proposal
-    execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
+    # sending proposal to blockchain
+    resp = requests.post(
+        BLOCKCHAIN_URL + "/actions",
+        json={
+            "proposal_id": proposal.thread_id,
+            "checkpoint_id": proposal.thread_id,
+            "tool_name": proposal.tool_name,
+            "tool_arguments": proposal.tool_arguments,
+            "reasoning_summary": proposal.reasoning_summary, 
+        },
+        timeout=3,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=500, detail="Blockchain rejected proposal")
+    result = resp.json()
+
+    if result.get("critical"):
+        pending_approvals[proposal.thread_id] = proposal
+        execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
+    else:
+        execution_status[proposal.thread_id] = "RUNNING"
+
     return {"status": "stored", "thread_id": proposal.thread_id}
 
 @router.post("/blockchain/approve")
@@ -178,6 +201,28 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
     if request.thread_id not in pending_approvals:
         raise HTTPException(status_code=404, detail="Thread not found")
     
+    proposal = pending_approvals[request.thread_id]
+    resp = requests.post(
+        BLOCKCHAIN_URL + "/blocks",
+        json={
+            "proposal_id": request.thread_id,
+            "checkpoint_id": request.thread_id,
+            "tool_name": proposal.tool_name,
+            "tool_arguments": proposal.tool_arguments,
+            "reasoning_summary": proposal.reasoning_summary,
+            "decision": {
+                "approved": request.approved,
+                "decision_by": "user",
+                "rejection_reason": request.reasoning,
+                "timestamp": int(datetime.now().timestamp()),
+            },
+            "timestamp": int(datetime.now().timestamp()),
+        },
+        timeout=5,
+    )
+    if resp.status_code not in (200, 201, 202):
+        raise HTTPException(status_code=500, detail="Blockchain failed to record decision")
+
     # Store decision
     approval_decisions[request.thread_id] = request
     

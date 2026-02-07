@@ -27,6 +27,10 @@ export default function ChatCanvas() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [criticalAction, setCriticalAction] = useState<CriticalAction | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [executionStage, setExecutionStage] = useState<
+    "ANALYZING" | "PLANNING" | "DETECTED_CRITICAL" | "AWAITING_APPROVAL" | "EXECUTING" | null
+  >(null);
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -94,6 +98,9 @@ export default function ChatCanvas() {
   }, [threadId]);
 
   const handleSendMessage = async (query: string) => {
+    setCriticalAction(null);
+    setThreadId(null);
+
     setMessages((prev) => [
       ...prev,
       {
@@ -147,6 +154,7 @@ export default function ChatCanvas() {
           timestamp: new Date().toISOString(),
         },
       ]);
+      setIsLoading(false);
       setThreadId(null);
     }
   };
@@ -195,6 +203,7 @@ export default function ChatCanvas() {
 
               {criticalAction && threadId && (
                 <ApprovalCard
+                  key={threadId}
                   action={criticalAction}
                   threadId={threadId}
                   onResponse={handleApprovalResponse}

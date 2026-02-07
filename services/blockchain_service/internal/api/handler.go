@@ -17,6 +17,7 @@ import (
 type Handler struct {
 	governance *governance.ProposalStore
 	tools      *governance.ToolRegistry
+	owners     *governance.DirectoryOwnerRegistry
 	blockchain *chain.Blockchain
 	consensus  *consensus.QuorumConsensus
 	validators *validator.ValidatorRegistry
@@ -25,6 +26,7 @@ type Handler struct {
 func NewHandler(
 	ps *governance.ProposalStore,
 	tr *governance.ToolRegistry,
+	or *governance.DirectoryOwnerRegistry,
 	bc *chain.Blockchain,
 	qc *consensus.QuorumConsensus,
 	vr *validator.ValidatorRegistry,
@@ -32,6 +34,7 @@ func NewHandler(
 	return &Handler{
 		governance: ps,
 		tools:      tr,
+		owners:     or,
 		blockchain: bc,
 		consensus:  qc,
 		validators: vr,
@@ -65,6 +68,24 @@ type PriorityResult struct {
 	CheckpointID     string `json:"checkpoint_id"`
 }
 
+func extractPaths(args map[string]interface{}) []string {
+	var paths []string
+
+	if p, ok := args["path"].(string); ok {
+		paths = append(paths, p)
+	}
+
+	if files, ok := args["files"].([]interface{}); ok {
+		for _, f := range files {
+			if s, ok := f.(string); ok {
+				paths = append(paths, s)
+			}
+		}
+	}
+
+	return paths
+}
+
 func (h *Handler) SubmitAction(c *gin.Context) {
 	var req struct {
 		ProposalID       string                 `json:"proposal_id"`
@@ -82,14 +103,30 @@ func (h *Handler) SubmitAction(c *gin.Context) {
 	isCritical := h.tools.IsCritical(req.ToolName)
 
 	if isCritical {
+		paths := extractPaths(req.ToolArguments)
+
+		validatorSet := map[string]bool{}
+		for _, p := range paths {
+			owners := h.owners.GetOwners(p)
+			for _, o := range owners {
+				validatorSet[o] = true
+			}
+		}
+
+		var required []string
+		for v := range validatorSet {
+			required = append(required, v)
+		}
+
 		h.governance.Store(&governance.Proposal{
-			ProposalID:       req.ProposalID,
-			CheckpointID:     req.CheckpointID,
-			ToolName:         req.ToolName,
-			ToolArguments:    req.ToolArguments,
-			ReasoningSummary: req.ReasoningSummary,
-			Status:           "pending",
-			CreatedAt:        time.Now(),
+			ProposalID:         req.ProposalID,
+			CheckpointID:       req.CheckpointID,
+			ToolName:           req.ToolName,
+			ToolArguments:      req.ToolArguments,
+			ReasoningSummary:   req.ReasoningSummary,
+			Status:             "pending",
+			RequiredValidators: required,
+			CreatedAt:          time.Now(),
 		})
 	}
 
@@ -165,6 +202,34 @@ func (h *Handler) RecordDecision(c *gin.Context) {
 
 		log.Printf("✓ Validator %s signed block", v.Name)
 	}
+	proposal, err := h.governance.Get(payload.ProposalID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "proposal not found"})
+		return
+	}
+
+	requiredSet := map[string]bool{}
+	for _, v := range proposal.RequiredValidators {
+		requiredSet[v] = true
+	}
+
+	signed := 0
+	for _, sig := range newBlock.ValidatorSig {
+		if requiredSet[sig.ValidatorID] {
+			signed++
+		}
+	}
+
+	required := len(requiredSet)
+
+	if signed < required {
+		c.JSON(http.StatusAccepted, gin.H{
+			"status": "waiting_for_validators",
+			"needed": required,
+			"signed": signed,
+		})
+		return
+	}
 
 	hasQuorum, err := h.consensus.HasQuorum(newBlock.Hash)
 	if err != nil {
@@ -187,7 +252,7 @@ func (h *Handler) RecordDecision(c *gin.Context) {
 
 	h.consensus.RemovePending(newBlock.Hash)
 
-	if err := h.blockchain.SaveToFile("./services/blockchain_service/data/blockchain.json"); err != nil {
+	if err := h.blockchain.SaveToFile("./data/blockchain.json"); err != nil {
 		log.Printf(" Failed to save blockchain: %v", err)
 	} else {
 		log.Printf("Blockchain saved (length: %d)", h.blockchain.Length())
