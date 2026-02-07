@@ -54,7 +54,6 @@ python -m backend.main
 ```
 cd frontend
 npm run dev
-
 ```
 - Blockchain server, built in Go
 ```
