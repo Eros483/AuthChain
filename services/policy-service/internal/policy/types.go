@@ -15,12 +15,10 @@ type ProposalFacts struct {
 }
 
 type PriorityResult struct {
-	Tier                string   `json:"tier"`
-	RequiresApproval    bool     `json:"requires_approval"`
-	AssignedDevelopers  []string `json:"assigned_developers"`
-	AffectedDirectories []string `json:"affected_directories"`
-	Reason              string   `json:"reason"`
-	CheckpointID        string   `json:"checkpoint_id"`
+	Tier             string `json:"tier"`
+	RequiresApproval bool   `json:"requires_approval"`
+	Reason           string `json:"reason"`
+	CheckpointID     string `json:"checkpoint_id"`
 }
 
 type ApprovalDecision struct {

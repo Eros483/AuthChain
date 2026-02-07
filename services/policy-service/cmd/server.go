@@ -1,18 +1,21 @@
+// policy-service/cmd/server.go
 package main
 
 import (
 	"log"
-	"policyservice/internal/mailbox"
+	"time"
+
+	"policyservice/internal/api"
 	"policyservice/internal/policy"
 	"policyservice/internal/proposal"
 	"policyservice/internal/storage"
-	"time"
 )
 
 func main() {
 	policyStore := storage.NewPolicyStore()
 	proposalStore := proposal.NewProposalStore()
 	evaluator := policy.NewEvaluator(policyStore)
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
@@ -23,19 +26,19 @@ func main() {
 			}
 		}
 	}()
-	proposalWatcher := mailbox.NewMailboxWatcher(evaluator, proposalStore)
-	decisionWatcher := mailbox.NewDecisionWatcher(proposalStore)
+
+	handler := api.NewHandler(evaluator, proposalStore)
+	router := api.SetupRouter(handler)
+
 	log.Println("Policy Service Starting")
-	log.Println(" Mode: File-based IPC (Mailbox)")
-	go func() {
-		if err := proposalWatcher.Start(); err != nil {
-			log.Fatal("Proposal watcher error:", err)
-		}
-	}()
-	go func() {
-		if err := decisionWatcher.Start(); err != nil {
-			log.Fatal("Decision watcher error:", err)
-		}
-	}()
-	select {}
+	log.Println("   Port: 8080")
+	log.Println("   Endpoints:")
+	log.Println("      POST   /api/evaluate")
+	log.Println("      POST   /api/decision")
+	log.Println("      GET    /api/proposals/pending")
+	log.Println("      GET    /api/health")
+
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal("Failed to start server:", err)
+	}
 }
