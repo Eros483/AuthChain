@@ -14,10 +14,9 @@ from services.ai_service.agent.prompts import SYSTEM_PROMPT
 from services.ai_service.ai_tools.manager import get_tools, is_critical
 from backend.core.llm_factory import get_llm
 
-import requests
-from datetime import datetime
+from backend.utils.logger import get_logger
 
-API_BASE_URL = "http://localhost:8000/api/v1"
+logger=get_logger(__name__)
 
 llm = get_llm() 
 tools = get_tools(llm)

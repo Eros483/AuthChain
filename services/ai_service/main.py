@@ -1,14 +1,12 @@
 # -----  Main Agent Runner @ services/ai_service/main.py -----
 
-from datetime import datetime
 import uuid
+import requests
+from datetime import datetime
 from langchain_core.messages import HumanMessage
 
 from services.ai_service.agent.graph import graph
 from services.ai_service.agent.prompts import format_rejection_message
-
-import requests
-from datetime import datetime
 
 API_BASE_URL = "http://localhost:8000/api/v1"
 
@@ -19,8 +17,11 @@ def run_agent_interactive(user_query: str):
     Flow:
     1. Agent processes query
     2. If critical tool -> interrupt and ask for approval
-    3. Human approves/rejects via blockchain IPC
+    3. Human approves/rejects via API
     4. Resume or inject rejection and continue
+    
+    Returns:
+        tuple: (thread_id, status, agent_output)
     """
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
@@ -34,6 +35,7 @@ def run_agent_interactive(user_query: str):
     # Track execution metrics
     tool_calls_made = 0
     nodes_visited = []
+    agent_messages = []  # Store agent's text responses
     
     # Initial invocation
     events = graph.stream(
@@ -59,12 +61,19 @@ def run_agent_interactive(user_query: str):
         print(f"\n[NODE: {current_node}] ({msg_type})")
         print("-" * 80)
         
-        # Display AI reasoning/thoughts
-        if hasattr(last_msg, 'content') and last_msg.content:
+        # Capture AI reasoning/thoughts
+        if hasattr(last_msg, 'content') and last_msg.content and msg_type == "AIMessage":
             content_preview = last_msg.content[:500]
             if len(last_msg.content) > 500:
                 content_preview += "... (truncated)"
             print(f"Content: {content_preview}")
+            
+            # Store full message for API response
+            agent_messages.append({
+                "type": "ai_message",
+                "content": last_msg.content,
+                "timestamp": datetime.now().isoformat()
+            })
         
         # Display tool calls with detailed arguments
         if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
@@ -77,13 +86,28 @@ def run_agent_interactive(user_query: str):
                     if len(str(arg_value)) > 200:
                         arg_preview += "... (truncated)"
                     print(f"    {arg_name}: {arg_preview}")
+                
+                # Store tool call info
+                agent_messages.append({
+                    "type": "tool_call",
+                    "tool_name": tc['name'],
+                    "arguments": tc['args'],
+                    "timestamp": datetime.now().isoformat()
+                })
         
-        # Display tool results
+        # Display and capture tool results
         if msg_type == "ToolMessage":
             result_preview = last_msg.content[:300]
             if len(last_msg.content) > 300:
                 result_preview += "... (truncated)"
             print(f"Tool Result: {result_preview}")
+            
+            # Store tool result
+            agent_messages.append({
+                "type": "tool_result",
+                "content": last_msg.content,
+                "timestamp": datetime.now().isoformat()
+            })
             
             # Highlight errors
             if "ERROR" in last_msg.content:
@@ -131,12 +155,22 @@ def run_agent_interactive(user_query: str):
         except Exception as e:
             print(f"\n❌ Failed to submit to API: {e}")
         
-        return thread_id, "AWAITING_APPROVAL"
+        return thread_id, "AWAITING_APPROVAL", {
+            "messages": agent_messages,
+            "tool_calls": tool_calls_made,
+            "nodes_visited": nodes_visited
+        }
     
     print("\n" + "=" * 80)
     print("AGENT SESSION COMPLETE")
     print("=" * 80)
-    return thread_id, "COMPLETED"
+    
+    return thread_id, "COMPLETED", {
+        "messages": agent_messages,
+        "tool_calls": tool_calls_made,
+        "nodes_visited": nodes_visited,
+        "summary": "Task completed successfully"
+    }
 
 
 def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str = None):
@@ -147,12 +181,17 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
         thread_id: The session ID
         approved: Whether the action was approved
         rejection_reason: If rejected, why?
+        
+    Returns:
+        dict: Final agent output
     """
     config = {"configurable": {"thread_id": thread_id}}
     
     print("\n" + "=" * 80)
     print(f"RESUMING SESSION: {thread_id}")
     print("=" * 80)
+    
+    agent_messages = []
     
     if approved:
         print("Action APPROVED - Executing critical tool...")
@@ -172,10 +211,23 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
                 if len(last_msg.content) > 500:
                     content_preview += "... (truncated)"
                 print(f"{content_preview}")
+                
+                if msg_type == "AIMessage":
+                    agent_messages.append({
+                        "type": "ai_message",
+                        "content": last_msg.content,
+                        "timestamp": datetime.now().isoformat()
+                    })
             
             if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
                 for tc in last_msg.tool_calls:
                     print(f"\nSubsequent Tool Call: {tc['name']}")
+                    agent_messages.append({
+                        "type": "tool_call",
+                        "tool_name": tc['name'],
+                        "arguments": tc['args'],
+                        "timestamp": datetime.now().isoformat()
+                    })
     
     else:
         print(f"Action REJECTED - Reason: {rejection_reason}")
@@ -206,10 +258,22 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
             
             if hasattr(last_msg, 'content') and last_msg.content:
                 print(f"{last_msg.content}")
+                
+                if msg_type == "AIMessage":
+                    agent_messages.append({
+                        "type": "ai_message",
+                        "content": last_msg.content,
+                        "timestamp": datetime.now().isoformat()
+                    })
     
     print("\n" + "=" * 80)
     print("SESSION COMPLETE")
     print("=" * 80)
+    
+    return {
+        "messages": agent_messages,
+        "summary": "Execution completed after approval decision"
+    }
 
 
 if __name__ == "__main__":
@@ -227,7 +291,12 @@ if __name__ == "__main__":
     else:
         # Fresh start
         query = input("Enter your request: ") if len(sys.argv) == 1 else " ".join(sys.argv[1:])
-        thread_id, status = run_agent_interactive(query)
+        thread_id, status, output = run_agent_interactive(query)
+        
+        print(f"\n=== AGENT OUTPUT ===")
+        print(f"Thread ID: {thread_id}")
+        print(f"Status: {status}")
+        print(f"Messages: {len(output['messages'])}")
         
         if status == "AWAITING_APPROVAL":
             print(f"\nSession saved. To resume:")

@@ -31,25 +31,6 @@ Starts the AI agent with a user query. The agent runs in the background and retu
 - `COMPLETED` - Task finished successfully
 - `ERROR` - Execution failed
 
-#### Example
-
-```bash
-curl -X POST http://localhost:8000/api/v1/agent/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Create a Python script that prints hello world"
-  }'
-```
-
-**Response:**
-```json
-{
-  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "RUNNING",
-  "message": "Agent execution started in background"
-}
-```
-
 ---
 
 ### 2. Get Agent Status
@@ -72,24 +53,65 @@ Check the current status of an agent execution.
 }
 ```
 
-#### Example
+---
 
-```bash
-curl http://localhost:8000/api/v1/agent/status/550e8400-e29b-41d4-a716-446655440000
-```
+### 3. Get Agent Response
 
-**Response:**
+**GET** `/api/v1/agent/response/{thread_id}`
+
+Get the agent's final output after execution completes. This includes all messages, tool calls, and results.
+
+#### Path Parameters
+
+- `thread_id` (string, required) - The session identifier returned from `/agent/execute`
+
+#### Response
+
 ```json
 {
-  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "AWAITING_APPROVAL",
-  "message": "Critical action requires approval"
+  "status": "COMPLETED",           // COMPLETED | ERROR | RUNNING
+  "completed_at": "string",        // ISO 8601 timestamp
+  "thread_id": "string",
+  "output": {
+    "messages": [                  // Array of all agent interactions
+      {
+        "type": "ai_message",
+        "content": "string",
+        "timestamp": "string"
+      },
+      {
+        "type": "tool_call",
+        "tool_name": "string",
+        "arguments": {},
+        "timestamp": "string"
+      },
+      {
+        "type": "tool_result",
+        "content": "string",
+        "timestamp": "string"
+      }
+    ],
+    "tool_calls": 1,               // Total number of tool calls made
+    "nodes_visited": ["array"],    // Execution flow through the graph
+    "summary": "string"            // Brief summary of what was accomplished
+  }
 }
 ```
 
+#### Message Types
+
+- `ai_message` - AI's reasoning or response to user
+- `tool_call` - A tool the agent executed
+- `tool_result` - The output from a tool execution
+
+
+#### Error Responses
+
+- `404 Not Found` - Thread ID not found
+- `200 OK` with `"status": "RUNNING"` - Execution still in progress, check back later
 ---
 
-### 3. Get Critical Action Details
+### 4. Get Critical Action Details
 
 **GET** `/api/v1/critical-action/{thread_id}`
 
@@ -112,26 +134,6 @@ Retrieve details about a pending critical action that requires approval.
   "timestamp": "string"               // ISO 8601 timestamp
 }
 ```
-
-#### Example
-
-```bash
-curl http://localhost:8000/api/v1/critical-action/550e8400-e29b-41d4-a716-446655440000
-```
-
-**Response:**
-```json
-{
-  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tool_name": "delete_file",
-  "tool_arguments": {
-    "path": "task_tracker.db"
-  },
-  "reasoning_summary": "The agent needs to delete task_tracker.db to free up space in the sandbox and ensure a clean environment for future tasks.",
-  "timestamp": "2026-02-07T12:15:30.123456"
-}
-```
-
 #### Error Responses
 
 - `404 Not Found` - No pending action for the specified thread_id
@@ -163,20 +165,6 @@ curl http://localhost:8000/api/v1/critical-action/550e8400-e29b-41d4-a716-446655
   "thread_id": "string"
 }
 ```
-
-#### Example
-
-```bash
-curl -X POST http://localhost:8000/api/v1/blockchain/approve \
-  -H "Content-Type: application/json" \
-  -d '{
-    "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-    "tool_name": "delete_file",
-    "tool_arguments": {"path": "task_tracker.db"},
-    "reasoning_summary": "Blockchain verified: Safe to delete test database"
-  }'
-```
-
 ---
 
 ### 6. User Approval
@@ -206,29 +194,6 @@ curl -X POST http://localhost:8000/api/v1/blockchain/approve \
 }
 ```
 
-#### Example - Approve
-
-```bash
-curl -X POST http://localhost:8000/api/v1/user/approve \
-  -H "Content-Type: application/json" \
-  -d '{
-    "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-    "approved": true
-  }'
-```
-
-#### Example - Reject
-
-```bash
-curl -X POST http://localhost:8000/api/v1/user/approve \
-  -H "Content-Type: application/json" \
-  -d '{
-    "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-    "approved": false,
-    "reasoning": "This database is still needed for testing"
-  }'
-```
-
 #### Error Responses
 
 - `404 Not Found` - Thread not found or no pending action
@@ -255,12 +220,6 @@ curl -X POST http://localhost:8000/api/v1/user/approve \
 }
 ```
 
-#### Example
-
-```bash
-curl http://localhost:8000/api/v1/user/decision/550e8400-e29b-41d4-a716-446655440000
-```
-
 #### Error Responses
 
 - `404 Not Found` - No decision has been made yet
@@ -282,52 +241,41 @@ Check if the API server is running.
 }
 ```
 
-#### Example
-
-```bash
-curl http://localhost:8000/health
-```
-
 ---
 
-## Workflow
-
-### Complete Request Flow
+## Request Flow Diagram
 
 ```
 1. Frontend → POST /api/v1/agent/execute
-   ↓
-   Returns: {thread_id, status: "RUNNING"}
+   ↓ Returns immediately
+   {"thread_id", "status": "RUNNING"}
 
-2. Agent executes in background
+2a. Safe Tool Path:
+   Agent → Executes tool
    ↓
-   If critical tool needed → Agent calls POST /api/v1/critical-action/submit
-   ↓
-   Status changes to "AWAITING_APPROVAL"
+   Frontend → GET /api/v1/agent/status/{thread_id}
+   ↓ Returns {"status": "COMPLETED"}
+   Frontend → GET /api/v1/agent/response/{thread_id}
+   ↓ Returns full output
 
-3. Frontend polls GET /api/v1/agent/status/{thread_id}
+2b. Critical Tool Path:
+   Agent → Detects critical tool
    ↓
-   Response: {status: "AWAITING_APPROVAL"}
-
-4. Frontend → GET /api/v1/critical-action/{thread_id}
+   Agent → POST /api/v1/critical-action/submit
    ↓
-   Returns: {tool_name, tool_arguments, reasoning_summary}
-
-5. [Optional] Blockchain → POST /api/v1/blockchain/approve
+   Frontend → GET /api/v1/agent/status/{thread_id}
+   ↓ Returns {"status": "AWAITING_APPROVAL"}
+   Frontend → GET /api/v1/critical-action/{thread_id}
+   ↓ Returns action details
+   [Optional] Blockchain → POST /api/v1/blockchain/approve
    ↓
-   Validates and forwards to user
-
-6. Frontend → POST /api/v1/user/approve
+   Frontend → POST /api/v1/user/approve
    ↓
-   {thread_id, approved: true/false, reasoning?}
+   Agent → Resumes execution
    ↓
-   Agent resumes execution
-
-7. Frontend → GET /api/v1/agent/status/{thread_id}
-   ↓
-   Response: {status: "COMPLETED"}
+   Frontend → GET /api/v1/agent/response/{thread_id}
+   ↓ Returns full output
 ```
-
 
 ---
 
@@ -343,4 +291,4 @@ curl http://localhost:8000/health
 
 ## Interactive API Documentation
 
-Visit `http://localhost:8000/docs` for Swagger UI documentation.
+Visit `http://localhost:8000/docs` for interactive Swagger UI documentation.

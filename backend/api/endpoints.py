@@ -9,29 +9,44 @@ from backend.api.models import (
     AgentStatusResponse
 )
 from services.ai_service.main import run_agent_interactive, resume_after_approval
-from typing import Dict
+from typing import Dict, Optional, List
 import asyncio
 from datetime import datetime
 
 router = APIRouter()
 
+# In-memory storage for pending approvals (replace with Redis/DB in production)
 pending_approvals: Dict[str, CriticalActionProposal] = {}
 approval_decisions: Dict[str, UserApprovalRequest] = {}
 execution_status: Dict[str, str] = {}  # Track execution status
+agent_responses: Dict[str, dict] = {}  # Store agent outputs
 
 def run_agent_background(query: str, thread_id: str):
     """
-    Background task to run agent without blocking API response
+    Background task to run agent without blocking API response.
+    Captures the agent's final output.
     """
     try:
         execution_status[thread_id] = "RUNNING"
-        actual_thread_id, status = run_agent_interactive(query)
+        actual_thread_id, status, output = run_agent_interactive(query)
         execution_status[thread_id] = status
         
-        # If critical action detected, it's already been submitted via the modified main.py
+        # Store the final response from the agent
+        # This will be accessible via the /agent/response endpoint
+        agent_responses[thread_id] = {
+            "status": status,
+            "completed_at": datetime.now().isoformat(),
+            "thread_id": actual_thread_id,
+            "output": output  # Contains messages, tool_calls, nodes_visited, summary
+        }
         
     except Exception as e:
         execution_status[thread_id] = f"ERROR: {str(e)}"
+        agent_responses[thread_id] = {
+            "status": "ERROR",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        }
         print(f"[BACKGROUND ERROR] {e}")
 
 @router.post("/agent/execute", response_model=AgentStatusResponse)
@@ -84,6 +99,31 @@ async def get_agent_status(thread_id: str):
             status="UNKNOWN",
             message="Thread ID not found"
         )
+
+@router.get("/agent/response/{thread_id}")
+async def get_agent_response(thread_id: str):
+    """
+    Get the agent's final output/response after execution completes.
+    
+    This endpoint returns:
+    - The final status (COMPLETED, ERROR, AWAITING_APPROVAL)
+    - Any output messages from the agent
+    - Timestamp of completion
+    
+    Use this to retrieve results after polling /agent/status shows COMPLETED.
+    """
+    if thread_id not in agent_responses and thread_id not in execution_status:
+        raise HTTPException(status_code=404, detail="Thread ID not found")
+    
+    if thread_id in agent_responses:
+        return agent_responses[thread_id]
+    
+    # Still running
+    return {
+        "thread_id": thread_id,
+        "status": execution_status.get(thread_id, "UNKNOWN"),
+        "message": "Execution still in progress"
+    }
 
 @router.get("/critical-action/{thread_id}", response_model=CriticalActionProposal)
 async def get_critical_action(thread_id: str):
@@ -141,12 +181,20 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
     # Resume agent execution in background
     def resume_background():
         try:
-            resume_after_approval(
+            output = resume_after_approval(
                 request.thread_id,
                 request.approved,
                 request.reasoning
             )
             execution_status[request.thread_id] = "COMPLETED"
+            
+            # Store final response
+            agent_responses[request.thread_id] = {
+                "status": "COMPLETED",
+                "approved": request.approved,
+                "completed_at": datetime.now().isoformat(),
+                "output": output
+            }
             
             # Cleanup
             if request.thread_id in pending_approvals:
@@ -154,6 +202,11 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
                 
         except Exception as e:
             execution_status[request.thread_id] = f"ERROR: {str(e)}"
+            agent_responses[request.thread_id] = {
+                "status": "ERROR",
+                "error": str(e),
+                "completed_at": datetime.now().isoformat()
+            }
             print(f"[RESUME ERROR] {e}")
     
     background_tasks.add_task(resume_background)
