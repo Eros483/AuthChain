@@ -8,6 +8,7 @@
 - [Getting Started](#getting-started)
 - [Usage](#usage)
 - [Repository Structure](#repository-structure)
+- [LLM Usage Notes](#llm-usage-notes)
 - [Further Documentation](#further-documentation)
 - [License](#license)
 
@@ -16,6 +17,8 @@
 The main objective of AuthChain is to enable AI autonomy while allowing human control over sensitive actions.
 
 AI usage excels at rapidly conducting lower complexity, high frequency tasks, but the probabilistic nature allows it to bypass prompt guardrails and execute tasks that violate security and privacy of data and code.
+
+We achieve this by routing critical tool execution through a blockchain pipeline. Any critical level request, before approval by a user is passed through the pipe, enabling immutable hashing of any requests and approval, enforcing explainable AI and accountable permissions.
 
 AuthChain seeks to allow execution of such tasks while allowing the Agent to log requests for permission for security-sensitive tasks. This allows us to leverage AI automation, while retain control.
 
@@ -60,6 +63,12 @@ AuthChain
         ├── cmd
         └── internal
 ```
+## LLM Usage Notes
+Ollama support can be utilized for testing this project.
+- Configure Ollama LLM and serving.
+- Refer to `backend/core/config.py`
+- Set `LOCAL_MODEL_NAME` to your preference and set `USE_LOCAL_LLM` as True.
+
 ## Further Documentation
 TODO
 
