@@ -71,6 +71,7 @@ AuthChain
 |
 ├── frontend
 │   └── public
+|
 └── services
     ├── ai_service
     │   ├── agent
