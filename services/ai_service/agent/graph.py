@@ -14,6 +14,11 @@ from services.ai_service.agent.prompts import SYSTEM_PROMPT
 from services.ai_service.ai_tools.manager import get_tools, is_critical
 from backend.core.llm_factory import get_llm
 
+import requests
+from datetime import datetime
+
+API_BASE_URL = "http://localhost:8000/api/v1"
+
 llm = get_llm() 
 tools = get_tools(llm)
 
@@ -118,24 +123,21 @@ def route_tools(state: AgentState) -> Literal["safe_tools", "critical_gate", "en
 
 def critical_gate(state: AgentState):
     """
-    Enhanced critical action gating with detailed reasoning
+    Critical action gating method
     """
     last_msg = state["messages"][-1]
     
     if not hasattr(last_msg, 'tool_calls') or not last_msg.tool_calls:
         return state
     
-    # Get the first critical tool call (ignore duplicates)
     tool_call = last_msg.tool_calls[0]
-    
-    # Build context from recent conversation
+
     recent_history = state["messages"][-8:]
     history_text = "\n".join([
         f"{msg.__class__.__name__}: {msg.content[:200] if hasattr(msg, 'content') else str(msg)[:200]}"
         for msg in recent_history
     ])
-    
-    # Get detailed reasoning from LLM
+
     summary_prompt = f"""
     Conversation Context:
     {history_text}
@@ -143,7 +145,7 @@ def critical_gate(state: AgentState):
     The AI agent is requesting permission to execute: {tool_call['name']}
     With arguments: {json.dumps(tool_call['args'], indent=2)}
     
-    Provide a clear, 2-3 sentence explanation of:
+    Provide a clear, 1-2 sentence explanation of:
     1. What this action will do
     2. Why the agent needs to do this to complete the task
     3. What the expected outcome is

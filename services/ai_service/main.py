@@ -1,12 +1,16 @@
 # -----  Main Agent Runner @ services/ai_service/main.py -----
 
+from datetime import datetime
 import uuid
 from langchain_core.messages import HumanMessage
 
 from services.ai_service.agent.graph import graph
-from services.ai_service.ipc.messenger import send_to_blockchain, check_for_approval
 from services.ai_service.agent.prompts import format_rejection_message
 
+import requests
+from datetime import datetime
+
+API_BASE_URL = "http://localhost:8000/api/v1"
 
 def run_agent_interactive(user_query: str):
     """
@@ -96,22 +100,36 @@ def run_agent_interactive(user_query: str):
     
     if state.next and "execute_critical" in state.next:
         print("\n" + "=" * 80)
-        print("CRITICAL ACTION DETECTED - APPROVAL REQUIRED")
+        print("CRITICAL ACTION DETECTED - SUBMITTING TO API")
         print("=" * 80)
         
-        # Send to blockchain for approval
-        payload = send_to_blockchain(state.values, thread_id)
+        # Prepare payload
+        payload = {
+            "thread_id": thread_id,
+            "tool_name": state.values["pending_critical_tool"]["name"],
+            "tool_arguments": state.values["pending_critical_tool"]["args"],
+            "reasoning_summary": state.values.get("reasoning_summary", ""),
+            "timestamp": datetime.now().isoformat()
+        }
         
         print(f"\nPending Critical Action:")
         print(f"  Tool: {payload['tool_name']}")
-        print(f"  Arguments: {payload.get('tool_args', {})}")
+        print(f"  Arguments: {payload['tool_arguments']}")
         print(f"\nReasoning:")
         print(f"  {payload['reasoning_summary']}")
         
-        print(f"\nWaiting for approval via IPC...")
-        print(f"  Mailbox: ./services/ipc_mailbox/blockchain/res_{thread_id}.json")
-        print(f"\nTo approve: Create response file with {{'approved': true}}")
-        print(f"To reject: Create response file with {{'approved': false, 'reason': '...'}}")
+        # Submit to API
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/critical-action/submit",
+                json=payload
+            )
+            response.raise_for_status()
+            print(f"\n✅ Critical action submitted to API")
+            print(f"   Blockchain can retrieve at: GET /api/v1/critical-action/{thread_id}")
+            print(f"   Frontend can retrieve at: GET /api/v1/critical-action/{thread_id}")
+        except Exception as e:
+            print(f"\n❌ Failed to submit to API: {e}")
         
         return thread_id, "AWAITING_APPROVAL"
     

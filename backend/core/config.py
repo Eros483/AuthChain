@@ -19,4 +19,6 @@ class Settings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    CORS_ORIGINS: list = ["http://localhost:3000"]
+
 settings = Settings()
