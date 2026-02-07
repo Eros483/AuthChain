@@ -2,7 +2,6 @@
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
-from langchain_openai import ChatOpenAI
 from backend.core.config import settings
 
 from backend.utils.logger import get_logger
