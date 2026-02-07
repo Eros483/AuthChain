@@ -341,36 +341,6 @@ curl http://localhost:8000/health
 
 ---
 
-## Critical Tools
-
-The following tools require human approval:
-
-- `write_file` - Create or modify files in sandbox
-- `delete_file` - Delete files from sandbox
-- `sql_db_query` - Execute raw SQL queries
-- `deploy_to_production` - Trigger production deployment
-
----
-
-## Safe Tools (No Approval Required)
-
-These tools execute immediately:
-
-- `read_file` - Read file contents
-- `list_directory` - List directory contents
-- `search_codebase` - Search for text in files
-- `sql_db_list_tables` - List database tables
-- `sql_db_schema` - View table schemas
-- `sql_db_query_checker` - Validate SQL queries
-- `git_status` - Show git status
-- `git_log` - View git history
-- `git_diff` - Show file differences
-
----
-
-
----
-
 ## Interactive API Documentation
 
 Visit `http://localhost:8000/docs` for Swagger UI documentation.
