@@ -1,7 +1,12 @@
+# ----- setup sandbox environment @ backend/utils/setup_sandbox.py -----
+
 import os
 import sqlite3
 import shutil
 import subprocess
+from backend.utils.logger import get_logger
+
+logger=get_logger(__name__)
 
 SANDBOX_ROOT = "./services/ai_service/sandbox"
 DB_NAME = "task_tracker.db"
@@ -10,7 +15,7 @@ DB_PATH = os.path.join(SANDBOX_ROOT, DB_NAME)
 def clean_environment():
     """Removes the existing sandbox directory to ensure a fresh start."""
     if os.path.exists(SANDBOX_ROOT):
-        print(f"🧹 Cleaning up existing sandbox at {SANDBOX_ROOT}...")
+        logger.info(f"🧹 Cleaning up existing sandbox at {SANDBOX_ROOT}...")
         shutil.rmtree(SANDBOX_ROOT)
 
 def create_scaffolding():
@@ -31,17 +36,16 @@ def create_scaffolding():
         with open(full_path, "w") as f:
             f.write(content)
             
-    print(f"📂 Directories and files created in {SANDBOX_ROOT}")
+    logger.info(f"📂 Directories and files created in {SANDBOX_ROOT}")
 
     # [FIX] Initialize Git Repo so agent git tools work
     try:
         subprocess.run(["git", "init"], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
         subprocess.run(["git", "add", "."], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
         subprocess.run(["git", "commit", "-m", "Initial scaffold"], cwd=SANDBOX_ROOT, check=True, stdout=subprocess.DEVNULL)
-        print(f"🌲 Git repository initialized in {SANDBOX_ROOT}")
+        logger.info(f"🌲 Git repository initialized in {SANDBOX_ROOT}")
     except Exception as e:
-        print(f"⚠️ Warning: Could not initialize git: {e}")
-
+        logger.warning(f"⚠️ Warning: Could not initialize git: {e}")
 def init_db():
     """Initializes the database with schema and seed data."""
     conn = sqlite3.connect(DB_PATH)
@@ -67,7 +71,7 @@ def init_db():
     """)
 
     # 3. Seed Data (Using data from Script 2)
-    print("Seeding database with initial data...")
+    logger.info("Seeding database with initial data...")
     
     # Note: We let 'created_at' auto-generate
     projects_data = [
@@ -85,11 +89,11 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print(f"✅ Database initialized at {DB_PATH}")
+    logger.info(f"✅ Database initialized at {DB_PATH}")
 
 if __name__ == "__main__":
-    print(f"🚀 Initializing Sandbox Environment...")
+    logger.info("Initializing Sandbox Environment...")
     clean_environment()
     create_scaffolding()
     init_db()
-    print("✨ Setup Complete.")
+    logger.info("Setup Complete.")

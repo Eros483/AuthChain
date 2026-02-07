@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+# ----- endpoint management for API @ backend/api/endpoints.py -----
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from backend.api.models import (
     UserQueryRequest,
     CriticalActionProposal,
@@ -9,28 +11,48 @@ from backend.api.models import (
 from services.ai_service.main import run_agent_interactive, resume_after_approval
 from typing import Dict
 import asyncio
+from datetime import datetime
 
 router = APIRouter()
 
 pending_approvals: Dict[str, CriticalActionProposal] = {}
 approval_decisions: Dict[str, UserApprovalRequest] = {}
+execution_status: Dict[str, str] = {}  # Track execution status
 
-@router.post("/agent/execute", response_model=AgentStatusResponse)
-async def execute_agent(request: UserQueryRequest):
+def run_agent_background(query: str, thread_id: str):
     """
-    Frontend sends user query to execute agent.
-    Returns thread_id and initial status.
+    Background task to run agent without blocking API response
     """
     try:
-        thread_id, status = run_agent_interactive(request.query)
+        execution_status[thread_id] = "RUNNING"
+        actual_thread_id, status = run_agent_interactive(query)
+        execution_status[thread_id] = status
         
-        return AgentStatusResponse(
-            thread_id=thread_id,
-            status=status,
-            message="Agent execution started" if status == "COMPLETED" else "Awaiting approval"
-        )
+        # If critical action detected, it's already been submitted via the modified main.py
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        execution_status[thread_id] = f"ERROR: {str(e)}"
+        print(f"[BACKGROUND ERROR] {e}")
+
+@router.post("/agent/execute", response_model=AgentStatusResponse)
+async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundTasks):
+    """
+    Frontend sends user query to execute agent.
+    Returns thread_id immediately and runs agent in background.
+    """
+    import uuid
+    thread_id = str(uuid.uuid4())
+    
+    # Start agent in background
+    background_tasks.add_task(run_agent_background, request.query, thread_id)
+    
+    execution_status[thread_id] = "RUNNING"
+    
+    return AgentStatusResponse(
+        thread_id=thread_id,
+        status="RUNNING",
+        message="Agent execution started in background"
+    )
 
 @router.get("/agent/status/{thread_id}", response_model=AgentStatusResponse)
 async def get_agent_status(thread_id: str):
@@ -48,6 +70,13 @@ async def get_agent_status(thread_id: str):
             thread_id=thread_id,
             status="COMPLETED",
             message="Execution resumed after approval decision"
+        )
+    elif thread_id in execution_status:
+        status = execution_status[thread_id]
+        return AgentStatusResponse(
+            thread_id=thread_id,
+            status=status,
+            message=f"Current status: {status}"
         )
     else:
         return AgentStatusResponse(
@@ -74,6 +103,7 @@ async def submit_critical_action(proposal: CriticalActionProposal):
     Stores the proposal for blockchain/frontend to retrieve.
     """
     pending_approvals[proposal.thread_id] = proposal
+    execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
     return {"status": "stored", "thread_id": proposal.thread_id}
 
 @router.post("/blockchain/approve")
@@ -96,8 +126,8 @@ async def blockchain_approval(request: BlockchainApprovalRequest):
     
     return {"status": "forwarded_to_user", "thread_id": request.thread_id}
 
-@router.post("/user/approve")
-async def user_approval(request: UserApprovalRequest):
+@router.post("/user/approve", response_model=dict)
+async def user_approval(request: UserApprovalRequest, background_tasks: BackgroundTasks):
     """
     Frontend posts user's approval/rejection decision here.
     Both blockchain and AI service read from this.
@@ -108,24 +138,32 @@ async def user_approval(request: UserApprovalRequest):
     # Store decision
     approval_decisions[request.thread_id] = request
     
-    # Resume agent execution
-    try:
-        resume_after_approval(
-            request.thread_id,
-            request.approved,
-            request.reasoning
-        )
-        
-        # Cleanup
-        del pending_approvals[request.thread_id]
-        
-        return {
-            "status": "executed",
-            "thread_id": request.thread_id,
-            "approved": request.approved
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Resume agent execution in background
+    def resume_background():
+        try:
+            resume_after_approval(
+                request.thread_id,
+                request.approved,
+                request.reasoning
+            )
+            execution_status[request.thread_id] = "COMPLETED"
+            
+            # Cleanup
+            if request.thread_id in pending_approvals:
+                del pending_approvals[request.thread_id]
+                
+        except Exception as e:
+            execution_status[request.thread_id] = f"ERROR: {str(e)}"
+            print(f"[RESUME ERROR] {e}")
+    
+    background_tasks.add_task(resume_background)
+    
+    return {
+        "status": "resuming",
+        "thread_id": request.thread_id,
+        "approved": request.approved,
+        "message": "Agent resuming in background"
+    }
 
 @router.get("/user/decision/{thread_id}")
 async def get_user_decision(thread_id: str):
