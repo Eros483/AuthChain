@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import ChatInput from "./ChatInput";
 import MessageBubble from "./MessageBubble";
 import ApprovalCard from "./ApprovalCard";
@@ -27,9 +28,15 @@ export default function ChatCanvas() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [criticalAction, setCriticalAction] = useState<CriticalAction | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [executionStage, setExecutionStage] = useState<
-    "ANALYZING" | "PLANNING" | "DETECTED_CRITICAL" | "AWAITING_APPROVAL" | "EXECUTING" | null
-  >(null);
+  type ExecutionStage =
+    | "ANALYZING"
+    | "PLANNING"
+    | "DETECTED_CRITICAL"
+    | "AWAITING_APPROVAL"
+    | "EXECUTING"
+    | null;
+  
+  const [executionStage, setExecutionStage] = useState<ExecutionStage>(null);
 
 
   const scrollToBottom = () => {
@@ -161,22 +168,43 @@ export default function ChatCanvas() {
   const showWelcome = messages.length === 0 && !isLoading;
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-pink-200/40 via-transparent to-violet-300/40 pointer-events-none" />
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#0B0E14]">
+      {/* Matching gradient from home page */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-1/3 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(77,163,255,0.12)_0%,rgba(11,14,20,0.95)_60%)]" />
+      </div>
+
+      {/* Back Button */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-sm text-[#9BA3B4] hover:text-[#E6E8EB] transition-colors group"
+        >
+          <svg
+            className="w-5 h-5 transition-transform group-hover:-translate-x-1"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            />
+          </svg>
+          <span>Back to Home</span>
+        </Link>
+      </div>
 
       <div className="relative flex flex-col min-h-screen">
-
         {showWelcome && (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
-           
             <div className="flex flex-col items-center">
-              {/* AuthChain - Bold and cleaner, sized correctly */}
-              <h1 className="text-5xl font-bold text-[#1b0b1f] tracking-tight">
+              <h1 className="text-5xl font-bold text-[#E6E8EB] tracking-tight">
                 AuthChain
               </h1>
-
-              {/* Tagline - Smaller and italicized */}
-              <p className="text-sm md:text-base text-[#1b0b1f]/90 italic font-medium leading-relaxed max-w-lg">
+              <p className="text-sm md:text-base text-[#9BA3B4] italic font-medium leading-relaxed max-w-lg mt-3">
                 Agent Execution powered with Blockchain governance
               </p>
             </div>
@@ -194,7 +222,7 @@ export default function ChatCanvas() {
 
               {isLoading && !criticalAction && (
                 <MessageBubble role="ai">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 text-[#9BA3B4]">
                     <div className="animate-pulse">Processing...</div>
                   </div>
                 </MessageBubble>

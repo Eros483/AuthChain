@@ -13,7 +13,7 @@ const suggestions = [
 export default function SuggestionCards({ onSelect }: Props) {
   return (
     <div className="mb-6">
-      <p className="text-xs text-neutral-500 mb-3">
+      <p className="text-center text-sm text-[#9BA3B4] mb-4">
         Suggestions to see how AuthChain helps you handle critical actions
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -21,7 +21,7 @@ export default function SuggestionCards({ onSelect }: Props) {
           <button
             key={index}
             onClick={() => onSelect(suggestion)}
-            className="text-left text-sm text-neutral-600 bg-white/60 backdrop-blur-sm px-4 py-3 rounded-lg border border-neutral-200 hover:bg-white/80 hover:border-neutral-300 transition-all"
+            className="text-left text-sm text-[#E6E8EB] bg-[#121826] px-4 py-3 rounded-lg border border-[#1E2638] hover:bg-[#1A2332] hover:border-[#4DA3FF]/50 transition-all"
           >
             {suggestion}
           </button>
