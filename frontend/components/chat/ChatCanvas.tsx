@@ -154,7 +154,6 @@ export default function ChatCanvas() {
           timestamp: new Date().toISOString(),
         },
       ]);
-      setIsLoading(false);
       setThreadId(null);
     }
   };

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { submitApproval, type CriticalAction } from "@/lib/api";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Props {
   action: CriticalAction;
@@ -61,9 +63,10 @@ export default function ApprovalCard({ action, threadId, onResponse }: Props) {
         </div>
 
         <div>
-          <span className="font-medium">Intent</span>
           <p className="text-neutral-600 mt-1">
-            {action.reasoning_summary}
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {action.reasoning_summary}
+              </ReactMarkdown>          
           </p>
         </div>
 
@@ -78,9 +81,9 @@ export default function ApprovalCard({ action, threadId, onResponse }: Props) {
           <summary className="cursor-pointer text-xs text-neutral-500">
             View raw execution payload
           </summary>
-          <pre className="mt-2 bg-neutral-100 p-3 rounded text-xs overflow-x-auto">
-            {JSON.stringify(action.tool_arguments, null, 2)}
-          </pre>
+        <pre className="mt-2 bg-neutral-100 p-3 rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
+          {JSON.stringify(action.tool_arguments, null, 2)}
+        </pre>
         </details>
       </div>
 
