@@ -33,6 +33,7 @@ cd frontend
 npm install
 cd ..
 ```
+- Ensure golang is installed. Check via `go version`
 - Conduct installations in your preferred environment manager (Ex: conda, uv, poetry, etc)
 ```
 conda create -n <environment-name> python=3.11
@@ -53,27 +54,30 @@ python -m backend.main
 ```
 cd frontend
 npm run dev
+
+```
+- Blockchain server, built in Go
+```
+cd services/blockchain_service
+go run cmd/server.go
 ```
 
 ## Repository Structure
 ```
 AuthChain
 ├── backend
+│   ├── api
 │   ├── core
 │   └── utils
+|
 ├── frontend
+│   └── public
 └── services
     ├── ai_service
     │   ├── agent
     │   ├── ai_tools
     │   └── sandbox
-    ├── blockchain_service
-    │   ├── cmd
-    │   ├── data
-    │   └── internal
-    └── policy-service
-        ├── cmd
-        └── internal
+    └── blockchain_service
 ```
 ## LLM Usage Notes
 Ollama support can be utilized for testing this project.
