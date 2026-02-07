@@ -44,7 +44,7 @@ pip install -r requirements.txt
 TODO
 - From base directory.
 ```
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+python -m backend.main
 ```
 
 ## Repository Structure
