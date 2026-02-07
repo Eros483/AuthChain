@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"authchain/internal/api"
 	"authchain/internal/chain"
@@ -11,6 +13,18 @@ import (
 	"authchain/internal/validator"
 )
 
+func pingSelf(url string) {
+	ticker := time.NewTicker(30 * time.Second)
+	for range ticker.C {
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Printf("Self-health check failed: %v", err)
+			continue
+		}
+		resp.Body.Close()
+		log.Printf("✓ Self-health check sent to %s | Status: %s", url, resp.Status)
+	}
+}
 func main() {
 	proposalStore := governance.NewProposalStore()
 	toolRegistry := governance.NewToolRegistry()
@@ -46,6 +60,8 @@ func main() {
 	)
 
 	router := api.SetupRouter(handler)
+	healthURL := "https://authchaingo.onrender.com/api/health"
+	go pingSelf(healthURL)
 
 	log.Println("Port: 8081")
 
