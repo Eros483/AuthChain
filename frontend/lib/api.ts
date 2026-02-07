@@ -1,4 +1,5 @@
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = "https://authchain-ejkf.onrender.com/api/v1";
+// const API_BASE = "http://localhost:8000/api/v1";
 
 export interface ExecuteResponse {
   thread_id: string;
