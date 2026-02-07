@@ -13,15 +13,6 @@ API_BASE_URL = "http://localhost:8000/api/v1"
 def run_agent_interactive(user_query: str, thread_id: str = None):
     """
     Runs the agent with interactive approval flow and enhanced observability.
-    
-    Flow:
-    1. Agent processes query
-    2. If critical tool -> interrupt and ask for approval
-    3. Human approves/rejects via API
-    4. Resume or inject rejection and continue
-    
-    Returns:
-        tuple: (thread_id, status, agent_output)
     """
     thread_id = thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
@@ -32,25 +23,21 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
     print(f"User Query: {user_query}")
     print("=" * 80)
     
-    # Track execution metrics
     tool_calls_made = 0
     nodes_visited = []
-    agent_messages = []  # Store agent's text responses
+    agent_messages = []
     
-    # Initial invocation
     events = graph.stream(
         {"messages": [HumanMessage(content=user_query)]},
         config,
         stream_mode="values"
     )
     
-    # Process events until we hit an interrupt or finish
     for event in events:
         last_msg = event["messages"][-1]
         msg_type = type(last_msg).__name__
         
-        # Determine which node produced this message
-        current_node = "agent"  # default
+        current_node = "agent"
         if hasattr(last_msg, 'name') and last_msg.name:
             current_node = last_msg.name
         elif msg_type == "ToolMessage":
@@ -61,21 +48,29 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         print(f"\n[NODE: {current_node}] ({msg_type})")
         print("-" * 80)
         
-        # Capture AI reasoning/thoughts
+        # FIX: Handle content being a list or string
         if hasattr(last_msg, 'content') and last_msg.content and msg_type == "AIMessage":
-            content_preview = last_msg.content[:500]
-            if len(last_msg.content) > 500:
-                content_preview += "... (truncated)"
-            print(f"Content: {content_preview}")
-            
-            # Store full message for API response
-            agent_messages.append({
-                "type": "ai_message",
-                "content": last_msg.content,
-                "timestamp": datetime.now().isoformat()
-            })
+            # Content can be string or list
+            if isinstance(last_msg.content, str):
+                content_preview = last_msg.content[:500]
+                if len(last_msg.content) > 500:
+                    content_preview += "... (truncated)"
+                print(f"Content: {content_preview}")
+                
+                agent_messages.append({
+                    "type": "ai_message",
+                    "content": last_msg.content,
+                    "timestamp": datetime.now().isoformat()
+                })
+            elif isinstance(last_msg.content, list):
+                print(f"Content: [List with {len(last_msg.content)} items]")
+                agent_messages.append({
+                    "type": "ai_message",
+                    "content": str(last_msg.content),
+                    "timestamp": datetime.now().isoformat()
+                })
         
-        # Display tool calls with detailed arguments
+        # Display tool calls
         if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
             for i, tc in enumerate(last_msg.tool_calls, 1):
                 tool_calls_made += 1
@@ -87,7 +82,6 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
                         arg_preview += "... (truncated)"
                     print(f"    {arg_name}: {arg_preview}")
                 
-                # Store tool call info
                 agent_messages.append({
                     "type": "tool_call",
                     "tool_name": tc['name'],
@@ -95,23 +89,25 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
                     "timestamp": datetime.now().isoformat()
                 })
         
-        # Display and capture tool results
+        # Display tool results
         if msg_type == "ToolMessage":
-            result_preview = last_msg.content[:300]
-            if len(last_msg.content) > 300:
-                result_preview += "... (truncated)"
-            print(f"Tool Result: {result_preview}")
-            
-            # Store tool result
-            agent_messages.append({
-                "type": "tool_result",
-                "content": last_msg.content,
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            # Highlight errors
-            if "ERROR" in last_msg.content:
-                print("\n>>> ERROR DETECTED IN TOOL OUTPUT <<<")
+            # FIX: Handle content being a list or string
+            if isinstance(last_msg.content, str):
+                result_preview = last_msg.content[:300]
+                if len(last_msg.content) > 300:
+                    result_preview += "... (truncated)"
+                print(f"Tool Result: {result_preview}")
+                
+                agent_messages.append({
+                    "type": "tool_result",
+                    "content": last_msg.content,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                if "ERROR" in last_msg.content:
+                    print("\n>>> ERROR DETECTED IN TOOL OUTPUT <<<")
+            else:
+                print(f"Tool Result: [Non-string content]")
     
     print("\n" + "=" * 80)
     print("AGENT EXECUTION PAUSED OR COMPLETED")
@@ -119,7 +115,6 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
     print(f"Nodes Visited: {' -> '.join(nodes_visited)}")
     print("=" * 80)
     
-    # Check if we interrupted (critical tool detected)
     state = graph.get_state(config)
     
     if state.next and "execute_critical" in state.next:
@@ -127,7 +122,6 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         print("CRITICAL ACTION DETECTED - SUBMITTING TO API")
         print("=" * 80)
         
-        # Prepare payload
         payload = {
             "thread_id": thread_id,
             "tool_name": state.values["pending_critical_tool"]["name"],
@@ -142,7 +136,6 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         print(f"\nReasoning:")
         print(f"  {payload['reasoning_summary']}")
         
-        # Submit to API
         try:
             response = requests.post(
                 f"{API_BASE_URL}/critical-action/submit",
@@ -172,18 +165,9 @@ def run_agent_interactive(user_query: str, thread_id: str = None):
         "summary": "Task completed successfully"
     }
 
-
 def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str = None):
     """
     Resumes agent execution after human decision.
-    
-    Args:
-        thread_id: The session ID
-        approved: Whether the action was approved
-        rejection_reason: If rejected, why?
-        
-    Returns:
-        dict: Final agent output
     """
     config = {"configurable": {"thread_id": thread_id}}
     
@@ -197,7 +181,6 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
         print("Action APPROVED - Executing critical tool...")
         print("-" * 80)
         
-        # Resume from interrupt - this executes the critical tool
         events = graph.stream(None, config, stream_mode="values")
         
         for event in events:
@@ -206,18 +189,22 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
             
             print(f"\n[{msg_type}]")
             
+            # FIX: Handle content being a list or string
             if hasattr(last_msg, 'content') and last_msg.content:
-                content_preview = last_msg.content[:500]
-                if len(last_msg.content) > 500:
-                    content_preview += "... (truncated)"
-                print(f"{content_preview}")
-                
-                if msg_type == "AIMessage":
-                    agent_messages.append({
-                        "type": "ai_message",
-                        "content": last_msg.content,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                if isinstance(last_msg.content, str):
+                    content_preview = last_msg.content[:500]
+                    if len(last_msg.content) > 500:
+                        content_preview += "... (truncated)"
+                    print(f"{content_preview}")
+                    
+                    if msg_type == "AIMessage":
+                        agent_messages.append({
+                            "type": "ai_message",
+                            "content": last_msg.content,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                else:
+                    print(f"[Non-string content: {type(last_msg.content)}]")
             
             if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
                 for tc in last_msg.tool_calls:
@@ -233,7 +220,6 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
         print(f"Action REJECTED - Reason: {rejection_reason}")
         print("-" * 80)
         
-        # Inject rejection message and continue
         state = graph.get_state(config)
         tool_name = state.values.get("pending_critical_tool", {}).get("name", "unknown")
         
@@ -241,13 +227,11 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
         
         print(f"\nInjecting rejection feedback into agent context...")
         
-        # Update state with rejection
         graph.update_state(
             config,
             {"messages": [HumanMessage(content=rejection_msg)]},
         )
         
-        # Resume agent to handle rejection
         events = graph.stream(None, config, stream_mode="values")
         
         for event in events:
@@ -256,15 +240,19 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
             
             print(f"\n[{msg_type}]")
             
+            # FIX: Handle content being a list or string
             if hasattr(last_msg, 'content') and last_msg.content:
-                print(f"{last_msg.content}")
-                
-                if msg_type == "AIMessage":
-                    agent_messages.append({
-                        "type": "ai_message",
-                        "content": last_msg.content,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                if isinstance(last_msg.content, str):
+                    print(f"{last_msg.content}")
+                    
+                    if msg_type == "AIMessage":
+                        agent_messages.append({
+                            "type": "ai_message",
+                            "content": last_msg.content,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                else:
+                    print(f"[Non-string content]")
     
     print("\n" + "=" * 80)
     print("SESSION COMPLETE")
@@ -274,7 +262,6 @@ def resume_after_approval(thread_id: str, approved: bool, rejection_reason: str 
         "messages": agent_messages,
         "summary": "Execution completed after approval decision"
     }
-
 
 if __name__ == "__main__":
     import sys

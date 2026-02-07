@@ -75,16 +75,24 @@ def call_model(state: AgentState):
                 messages.append(HumanMessage(content=error_guidance))
 
     response = llm_with_tools.invoke(messages)
-    
-    # LOG duplicate tool calls for debugging (but don't block them)
+
     if hasattr(response, 'tool_calls') and response.tool_calls and len(response.tool_calls) > 1:
         seen = {}
+        unique_tool_calls = []
+        
         for i, tc in enumerate(response.tool_calls):
+            # Create signature from tool name + arguments
             tc_signature = (tc['name'], json.dumps(tc['args'], sort_keys=True))
-            if tc_signature in seen:
-                logger.info(f"\n[DEBUG] Duplicate tool call detected: {tc['name']} (call #{i+1} matches call #{seen[tc_signature]+1})")
-            else:
+            
+            if tc_signature not in seen:
                 seen[tc_signature] = i
+                unique_tool_calls.append(tc)
+            else:
+                logger.warning(f"🔁 Removed exact duplicate tool call #{i+1}: {tc['name']} (identical to call #{seen[tc_signature]+1})")
+
+        if len(unique_tool_calls) < len(response.tool_calls):
+            response.tool_calls = unique_tool_calls
+            logger.info(f"✂️ Deduplicated: {len(response.tool_calls)} → {len(unique_tool_calls)} tool calls")
     
     return {"messages": [response]}
 
