@@ -19,6 +19,6 @@ class Settings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    CORS_ORIGINS: list = ["http://localhost:3000"]
+    CORS_ORIGINS: list = ["http://localhost:3000", "https://auth-chain-kgij.vercel.app/"]
 
 settings = Settings()

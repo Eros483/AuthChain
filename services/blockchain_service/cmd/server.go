@@ -45,7 +45,7 @@ func main() {
 	log.Printf("✓ Blockchain loaded (length: %d)", blockchain.Length())
 
 	validatorRegistry := validator.NewValidatorRegistry()
-	log.Printf("✓ Validator registry initialized (empty - add validators via API)")
+	log.Printf("✓ Validator registry initialized")
 
 	quorumConsensus := consensus.NewQuorumConsensus(validatorRegistry)
 	log.Printf("✓ Consensus mechanism initialized")
@@ -62,6 +62,8 @@ func main() {
 	router := api.SetupRouter(handler)
 	healthURL := "https://authchaingo.onrender.com/api/health"
 	go pingSelf(healthURL)
+	healthURLPython := "https://authchain-ejkf.onrender.com"
+	go pingSelf(healthURLPython)
 
 	log.Println("Port: 8081")
 

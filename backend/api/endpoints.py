@@ -25,7 +25,7 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-BLOCKCHAIN_URL = "http://localhost:8081/api"
+BLOCKCHAIN_URL = "https://authchaingo.onrender.com//api"
 
 router = APIRouter()
 
