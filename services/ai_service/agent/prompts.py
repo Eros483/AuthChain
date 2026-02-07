@@ -77,7 +77,7 @@ def format_rejection_message(tool_name: str, reasoning: str) -> str:
 
 def create_approval_summary(state: dict) -> str:
     """
-    Create a human-readable summary for the approval UI
+    Create a human-readable one-line summary for the approval UI
     """
     tool_call = state.get("pending_critical_tool", {})
     reasoning = state.get("reasoning_summary", "No reasoning provided")
