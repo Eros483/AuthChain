@@ -1,4 +1,3 @@
-// blockchain-service/cmd/server.go
 package main
 
 import (
