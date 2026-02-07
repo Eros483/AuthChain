@@ -100,7 +100,7 @@ export default function ChatCanvas() {
       }
     };
 
-    const interval = setInterval(pollStatus, 2000);
+    const interval = setInterval(pollStatus, 5000);
     return () => clearInterval(interval);
   }, [threadId]);
 
