@@ -54,13 +54,6 @@ The frontend polls the status endpoint to check:
 - `COMPLETED` - Task finished
 - `ERROR` - Execution failed
 
-## Components
-
-- **ChatCanvas** - Main container with state management and polling logic
-- **ChatInput** - Input field with send functionality
-- **MessageBubble** - Message display component for user and AI messages
-- **ApprovalCard** - Critical action approval UI with approve/reject buttons
-- **SuggestionCards** - Pre-defined question suggestions
 
 ## Building for Production
 
