@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     - Gemini API Key
     - Local LLM usage flag and model name
     """
-    USE_LOCAL_LLM: bool = True 
+    USE_LOCAL_LLM: bool = os.getenv("USE_LOCAL_LLM", "False") 
     LOCAL_MODEL_NAME: str = "llama3.1"
 
     GEMINI_API_KEY: str=os.getenv("GEMINI_API_KEY")
