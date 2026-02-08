@@ -3,7 +3,6 @@
 import { useState } from "react";
 import LoginGate from "@/components/admin/LoginGate";
 import ValidatorForm from "@/components/admin/ValidatorForm";
-import ValidatorList from "@/components/admin/ValidatorList";
 import Link from "next/link";
 
 export default function AdminPage() {
@@ -43,7 +42,6 @@ export default function AdminPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         <ValidatorForm />
-        <ValidatorList />
       </div>
     </main>
   );
