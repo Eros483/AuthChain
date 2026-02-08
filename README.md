@@ -88,10 +88,7 @@ AuthChain
 Ollama support can be utilized for testing this project.
 - Configure Ollama LLM and serving.
 - Refer to `backend/core/config.py`
-- Set `LOCAL_MODEL_NAME` to your preference and set `USE_LOCAL_LLM` as True.
-
-## Further Documentation
-TODO
+- Set `LOCAL_MODEL_NAME` to your preference and set `USE_LOCAL_LLM` as True as a environment variable.
 
 ## License
 This project is licensed under the MIT License - refer to `LICENSE` for further details.
