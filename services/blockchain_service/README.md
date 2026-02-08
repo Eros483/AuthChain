@@ -79,6 +79,21 @@ Restarting the service reloads the chain safely
 | `DELETE /api/validators/:id`   | Deactivate a validator                |
 | `GET /api/health`              | Blockchain service health             |
 
+
+# Installation
+*Go version req: `go 1.25.0`*
+
+From `blockchain_services` dir:
+```
+go mod tidy
+```
+To install dependencies and libraries.
+
+To run (dir: `blockchain_services`):
+```
+go run cmd/server.go
+```
+
 ### Security Guarantees
 
 AuthChain provides:
