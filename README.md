@@ -14,6 +14,7 @@
 - [Repository Structure](#repository-structure)
 - [LLM Usage Notes](#llm-usage-notes)
 - [Further Documentation](#further-documentation)
+- [Prototyped self tool creation capabilities](#prototype-self-tool-creation)
 - [License](#license)
 
 
@@ -84,6 +85,12 @@ AuthChain
     │   └── sandbox
     └── blockchain_service
 ```
+## Prototype self tool creation
+**Note**: This is a experimental feature and only runs on local installations.
+```
+python tool_generation_demo.py
+```
+
 ## LLM Usage Notes
 Ollama support can be utilized for testing this project.
 - Configure Ollama LLM and serving.
