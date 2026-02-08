@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const API = "https://authchaingo.onrender.com/api";
 
@@ -21,6 +21,7 @@ export default function ValidatorForm() {
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     setId(randomValidatorId());
@@ -28,24 +29,33 @@ export default function ValidatorForm() {
   }, []);
 
   const submit = async () => {
-    await fetch(`${API}/validators`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        name,
-        public_key: key,
-      }),
-    });
+    if (!name.trim()) return;
 
-    setId(randomValidatorId());
-    setName("");
-    setKey(randomPublicKey());
+    setSubmitting(true);
+    try {
+      await fetch(`${API}/validators`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          name,
+          public_key: key,
+        }),
+      });
+
+      setId(randomValidatorId());
+      setName("");
+      setKey(randomPublicKey());
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="bg-[#121826] p-6 rounded-lg border border-white/10">
-      <h3 className="text-lg mb-4 text-white">Add Validator</h3>
+      <h3 className="text-lg mb-4 text-white">
+        Register Governance Validator
+      </h3>
 
       <input
         className="w-full mb-3 px-3 py-2 bg-black/40 border border-white/10 rounded text-white placeholder:text-[#9BA3B4]"
@@ -70,9 +80,10 @@ export default function ValidatorForm() {
 
       <button
         onClick={submit}
-        className="bg-[#4DA3FF] text-black px-4 py-2 rounded"
+        disabled={submitting}
+        className="bg-[#4DA3FF] text-black px-4 py-2 rounded disabled:opacity-50"
       >
-        Register Validator
+        {submitting ? "Registering…" : "Register Validator"}
       </button>
     </div>
   );

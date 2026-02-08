@@ -30,6 +30,7 @@ func SetupRouter(handler *Handler) *gin.Engine {
 		api.POST("/validators", handler.AddValidator)
 		api.GET("/validators", handler.GetValidators)
 		api.DELETE("/validators/:id", handler.RemoveValidator)
+		api.POST("/solana/approve", handler.ApproveOnSolana)
 
 		api.GET("/health", handler.HealthCheck)
 	}

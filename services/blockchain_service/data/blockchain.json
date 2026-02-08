@@ -138,6 +138,28 @@
           "timestamp": 1770468125
         }
       ]
+    },
+    {
+      "index": 5,
+      "timestamp": 1770519123,
+      "previous_hash": "d78382c409948f6cb6e2b9069c88e8a5fee0b264fe75ee40b0fcbffa06305829",
+      "hash": "45c64f182effc980d2786e977ac49aa867e2ee2dd8df29e7fd67815f30c31f81",
+      "data": {
+        "proposal_id": "proposal_demo_1",
+        "checkpoint_id": "chk_001",
+        "tool_name": "write_file",
+        "tool_arguments": {
+          "path": "src/auth/config.yaml"
+        },
+        "reasoning_summary": "After Solana approval",
+        "decision": {
+          "approved": true,
+          "decision_by": "validator_1",
+          "timestamp": 1700000001
+        },
+        "timestamp": 1700000001
+      },
+      "validator_sig": []
     }
   ]
 }

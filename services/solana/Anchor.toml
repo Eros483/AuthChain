@@ -1,0 +1,6 @@
+[programs.devnet]
+authchain_lock = "9PJrqNkKsgD8eswsMYAXzkPrQrPaN4gFtz7YsM5xGiEW"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
