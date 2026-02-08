@@ -90,59 +90,51 @@ async def execute_agent(request: UserQueryRequest, background_tasks: BackgroundT
         message="Agent execution started in background"
     )
 
-# @router.get("/agent/status/{thread_id}", response_model=AgentStatusResponse)
-# async def get_agent_status(thread_id: str):
-#     """
-#     Check if agent is waiting for approval or has completed.
-#     """
-#     if thread_id in pending_approvals:
-#         return AgentStatusResponse(
-#             thread_id=thread_id,
-#             status="AWAITING_APPROVAL",
-#             message="Critical action requires approval"
-#         )
-#     elif thread_id in approval_decisions:
-#         return AgentStatusResponse(
-#             thread_id=thread_id,
-#             status="COMPLETED",
-#             message="Execution resumed after approval decision"
-#         )
-#     elif thread_id in execution_status:
-#         status = execution_status[thread_id]
-#         return AgentStatusResponse(
-#             thread_id=thread_id,
-#             status=status,
-#             message=f"Current status: {status}"
-#         )
-#     else:
-#         return AgentStatusResponse(
-#             thread_id=thread_id,
-#             status="UNKNOWN",
-#             message="Thread ID not found"
-#         )
 @router.get("/agent/status/{thread_id}", response_model=AgentStatusResponse)
 async def get_agent_status(thread_id: str):
+    """
+    Check if agent is waiting for approval or has completed.
+    """
     if thread_id in pending_approvals:
         return AgentStatusResponse(
             thread_id=thread_id,
             status="AWAITING_APPROVAL",
             message="Critical action requires approval"
         )
-
+    
     if thread_id in agent_responses:
-        return AgentStatusResponse(
-            thread_id=thread_id,
-            status="COMPLETED",
-            message="Execution completed"
-        )
-
+        response_data = agent_responses[thread_id]
+        if response_data.get("status") == "COMPLETED":
+            return AgentStatusResponse(
+                thread_id=thread_id,
+                status="COMPLETED",
+                message="Execution completed successfully"
+            )
+        elif response_data.get("status") == "ERROR":
+            return AgentStatusResponse(
+                thread_id=thread_id,
+                status="ERROR",
+                message=f"Execution failed: {response_data.get('error', 'Unknown error')}"
+            )
+    
     if thread_id in execution_status:
+        status = execution_status[thread_id]
+        
+        if status == "COMPLETED" and thread_id not in agent_responses:
+            logger.info(f"[STATUS] Thread {thread_id} marked COMPLETED but response not ready")
+            return AgentStatusResponse(
+                thread_id=thread_id,
+                status="RUNNING",
+                message="Finalizing response..."
+            )
+        
         return AgentStatusResponse(
             thread_id=thread_id,
-            status=execution_status[thread_id],
-            message=f"Current status: {execution_status[thread_id]}"
+            status=status,
+            message=f"Current status: {status}"
         )
-
+    
+    # Not found
     return AgentStatusResponse(
         thread_id=thread_id,
         status="UNKNOWN",
@@ -176,34 +168,6 @@ async def get_critical_action(thread_id: str):
     
     return pending_approvals[thread_id]
 
-# @router.post("/critical-action/submit")
-# async def submit_critical_action(proposal: CriticalActionProposal):
-#     """
-#     AI service calls this when critical tool is triggered.
-#     """
-#     try:
-#         resp = requests.post(
-#             BLOCKCHAIN_URL + "/actions",
-#             json={
-#                 "proposal_id": proposal.thread_id,
-#                 "checkpoint_id": proposal.thread_id,
-#                 "tool_name": proposal.tool_name,
-#                 "tool_arguments": proposal.tool_arguments,
-#                 "reasoning_summary": proposal.reasoning_summary,
-#             },
-#             timeout=3,
-#         )
-#         if resp.status_code != 200:
-#             logger.warning(f"Blockchain rejected proposal: {resp.status_code}")
-#     except requests.exceptions.RequestException as e:
-#         logger.error(f"Failed to connect to blockchain: {e}")
-#         # Continue anyway
-    
-#     # Store in shared state
-#     pending_approvals[proposal.thread_id] = proposal
-#     execution_status[proposal.thread_id] = "AWAITING_APPROVAL"
-    
-#     return {"status": "stored", "thread_id": proposal.thread_id}
 @router.post("/critical-action/submit")
 async def submit_critical_action(proposal: CriticalActionProposal):
     """
@@ -308,6 +272,8 @@ async def user_approval(request: UserApprovalRequest, background_tasks: Backgrou
         logger.error(f"Failed to connect to blockchain: {e}")
     
     approval_decisions[request.thread_id] = request
+
+    
     
     def resume_background():
         try:

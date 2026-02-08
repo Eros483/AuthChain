@@ -8,7 +8,7 @@ import remarkGfm from "remark-gfm";
 interface Props {
   action: CriticalAction;
   threadId: string;
-  onResponse: (approved: boolean) => void;
+  onResponse: (approved: boolean, threadId: string) => void;
 }
 
 export default function ApprovalCard({ action, threadId, onResponse }: Props) {
@@ -17,10 +17,12 @@ export default function ApprovalCard({ action, threadId, onResponse }: Props) {
   const [rejectReason, setRejectReason] = useState("");
 
   const handleAuthorize = async () => {
+    if (isProcessing) return; 
+    
     setIsProcessing(true);
     try {
       await submitApproval(threadId, true);
-      onResponse(true);
+      onResponse(true, threadId);
     } catch (err) {
       console.error("Authorization failed:", err);
       setIsProcessing(false);
@@ -33,10 +35,12 @@ export default function ApprovalCard({ action, threadId, onResponse }: Props) {
       return;
     }
 
+    if (isProcessing) return; 
+
     setIsProcessing(true);
     try {
       await submitApproval(threadId, false, rejectReason);
-      onResponse(false);
+      onResponse(false, threadId);
     } catch (err) {
       console.error("Denial failed:", err);
       setIsProcessing(false);
@@ -106,7 +110,7 @@ export default function ApprovalCard({ action, threadId, onResponse }: Props) {
         <button
           onClick={handleAuthorize}
           disabled={isProcessing}
-          className="flex-1 bg-[#4DA3FF] text-[#0B0E14] px-4 py-2 rounded-md text-sm font-medium hover:bg-[#6CB6FF] disabled:opacity-50 transition-all"
+          className="flex-1 bg-[#4DA3FF] text-[#0B0E14] px-4 py-2 rounded-md text-sm font-medium hover:bg-[#6CB6FF] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {isProcessing ? "Authorizing..." : "Authorize Execution"}
         </button>
@@ -114,7 +118,7 @@ export default function ApprovalCard({ action, threadId, onResponse }: Props) {
         <button
           onClick={handleDeny}
           disabled={isProcessing}
-          className="flex-1 bg-[#1A2332] border border-[#1E2638] px-4 py-2 rounded-md text-sm font-medium text-[#E6E8EB] hover:bg-[#1E2638] disabled:opacity-50 transition-all"
+          className="flex-1 bg-[#1A2332] border border-[#1E2638] px-4 py-2 rounded-md text-sm font-medium text-[#E6E8EB] hover:bg-[#1E2638] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {isProcessing ? "Processing..." : "Deny Action"}
         </button>

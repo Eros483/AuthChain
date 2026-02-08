@@ -27,19 +27,10 @@ export default function ChatCanvas() {
   const [isLoading, setIsLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [criticalAction, setCriticalAction] = useState<CriticalAction | null>(null);
+  const [pollTrigger, setPollTrigger] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  type ExecutionStage =
-    | "ANALYZING"
-    | "PLANNING"
-    | "DETECTED_CRITICAL"
-    | "AWAITING_APPROVAL"
-    | "EXECUTING"
-    | null;
-  
-  const [executionStage, setExecutionStage] = useState<ExecutionStage>(null);
-
+  const [approvalLocked, setApprovalLocked] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -51,51 +42,72 @@ export default function ChatCanvas() {
 
   useEffect(() => {
     if (!threadId) return;
-  
+
+    console.log(`[POLLING] Starting for thread: ${threadId} (trigger: ${pollTrigger})`);
+
     if (pollerRef.current) {
       clearInterval(pollerRef.current);
       pollerRef.current = null;
     }
-  
+
     pollerRef.current = setInterval(async () => {
       try {
+        console.log(`[POLLING] Checking status for thread: ${threadId}`);
         const status = await getAgentStatus(threadId);
-      
+        console.log(`[POLLING] Status: ${status.status}`);
+
         if (status.status === "AWAITING_APPROVAL") {
+          console.log(`[POLLING] Awaiting approval, fetching critical action...`);
           const action = await getCriticalAction(threadId);
           setCriticalAction(action);
           setIsLoading(false);
-        
+
           clearInterval(pollerRef.current!);
           pollerRef.current = null;
         }
-      
+
         if (status.status === "COMPLETED") {
-          const response = await getAgentResponse(threadId);
-        
-          const aiMessages =
-            response.output?.messages?.filter(
-              (m: Message) => m.type === "ai_message" && m.content
-            ) ?? [];
-          
-          if (aiMessages.length) {
-            const last = aiMessages[aiMessages.length - 1];
-            setMessages(prev => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                role: "ai",
-                content: last.content!,
-                timestamp: last.timestamp,
-              },
-            ]);
+          console.log(`[POLLING] Execution completed, fetching response...`);
+          try {
+            const response = await getAgentResponse(threadId);
+            console.log(`[POLLING] Response:`, response);
+
+            if (response.output?.messages) {
+              const aiMessages = response.output.messages.filter(
+                (m: Message) => m.type === "ai_message" && m.content
+              );
+
+              console.log(`[POLLING] Found ${aiMessages.length} AI messages`);
+
+              if (aiMessages.length > 0) {
+                const last = aiMessages[aiMessages.length - 1];
+                console.log(`[POLLING] Adding final message to UI`);
+                
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "ai",
+                    content: last.content!,
+                    timestamp: last.timestamp,
+                  },
+                ]);
+                
+                cleanupPolling();
+              } else {
+                console.log(`[POLLING] No AI messages yet, continuing to poll...`);
+              }
+            } else {
+              console.log(`[POLLING] Response output not ready, continuing to poll...`);
+            }
+          } catch (error) {
+            console.error(`[POLLING] Error fetching response:`, error);
           }
-        
-          cleanupPolling();
         }
-      
+
         if (status.status === "ERROR") {
-          setMessages(prev => [
+          console.log(`[POLLING] Error status detected`);
+          setMessages((prev) => [
             ...prev,
             {
               id: crypto.randomUUID(),
@@ -104,28 +116,36 @@ export default function ChatCanvas() {
               timestamp: new Date().toISOString(),
             },
           ]);
-        
+
           cleanupPolling();
         }
       } catch (e) {
-        console.error(e);
+        console.error(`[POLLING] Exception:`, e);
         cleanupPolling();
       }
-    }, 3000);
-  
-    return cleanupPolling;
-  }, [threadId]);
-  
+    }, 2000);
+
+    return () => {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    };
+  }, [threadId, pollTrigger]);
+
   const cleanupPolling = () => {
+    console.log(`[POLLING] Cleanup called`);
     if (pollerRef.current) {
       clearInterval(pollerRef.current);
       pollerRef.current = null;
     }
     setThreadId(null);
     setIsLoading(false);
+    setCriticalAction(null);
   };
 
   const handleSendMessage = async (query: string) => {
+    console.log(`[MESSAGE] Sending: ${query}`);
     setCriticalAction(null);
     setThreadId(null);
 
@@ -143,9 +163,11 @@ export default function ChatCanvas() {
 
     try {
       const result = await executeAgent(query);
+      console.log(`[MESSAGE] Agent started with thread: ${result.thread_id}`);
       setThreadId(result.thread_id);
+      setPollTrigger(prev => prev + 1);
     } catch (error) {
-      console.error("Error executing agent:", error);
+      console.error("[MESSAGE] Error executing agent:", error);
       setMessages((prev) => [
         ...prev,
         {
@@ -159,12 +181,15 @@ export default function ChatCanvas() {
     }
   };
 
-  const handleApprovalResponse = (approved: boolean) => {
-    cleanupPolling();
+  const handleApprovalResponse = (approved: boolean, currentThreadId: string) => {
+    console.log(`[APPROVAL] Response: ${approved ? 'APPROVED' : 'REJECTED'} for thread: ${currentThreadId}`);
+    
+    setApprovalLocked(true);       
     setCriticalAction(null);
+    setIsLoading(true);
 
     if (approved) {
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -173,8 +198,11 @@ export default function ChatCanvas() {
           timestamp: new Date().toISOString(),
         },
       ]);
+
+      console.log(`[APPROVAL] Forcing polling restart for thread: ${currentThreadId}`);
+      setPollTrigger(prev => prev + 1);
     } else {
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -183,6 +211,8 @@ export default function ChatCanvas() {
           timestamp: new Date().toISOString(),
         },
       ]);
+
+      cleanupPolling();
     }
   };
 
@@ -190,12 +220,10 @@ export default function ChatCanvas() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#0B0E14]">
-      {/* Matching gradient from home page */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-1/3 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(77,163,255,0.12)_0%,rgba(11,14,20,0.95)_60%)]" />
       </div>
 
-      {/* Back Button */}
       <div className="absolute top-6 left-6 z-20">
         <Link
           href="/"
@@ -249,11 +277,11 @@ export default function ChatCanvas() {
                 </MessageBubble>
               )}
 
-              {criticalAction && threadId && (
+              {criticalAction && (
                 <ApprovalCard
-                  key={threadId}
+                  key={criticalAction.thread_id}
                   action={criticalAction}
-                  threadId={threadId}
+                  threadId={criticalAction.thread_id}
                   onResponse={handleApprovalResponse}
                 />
               )}
