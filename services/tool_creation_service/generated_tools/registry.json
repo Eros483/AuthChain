@@ -1,0 +1,25 @@
+{
+  "tools": {
+    "compute_rsi": {
+      "hash": "659c2f4055ca5524",
+      "filepath": "./services/tool_creation_service/generated_tools/compute_rsi_659c2f4055ca5524.py",
+      "description": "Calculates Relative Strength Index (RSI) of an asset's price movement",
+      "risk_tier": "SAFE",
+      "parameters": [
+        {
+          "name": "prices",
+          "type": "list",
+          "description": "List of historical prices"
+        },
+        {
+          "name": "period",
+          "type": "int",
+          "description": "Time period for RSI calculation"
+        }
+      ],
+      "created_at": "2026-02-08T08:08:33.049713",
+      "approved_by": "cli_user",
+      "reasoning": "Needed to analyze asset price movements and identify potential overbought/oversold conditions"
+    }
+  }
+}
