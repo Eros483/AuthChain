@@ -3,6 +3,11 @@
   <em>A system for enforcing human oversight over autonomous AI systems, built on an interruption-driven control architecture with permissioned, auditable execution enforced via blockchain-based governance.</em>
 </div>
 
+<p align="center">
+  <img src="public/landing_page.png" width="45%" alt="Landing Page">
+  <img src="public/approval_page.png" width="45%" alt="Approval Page">
+</p>
+
 ## Table of Contents
 - [Description](#description)
 - [Getting Started and local usage](#getting-started-for-local-usage)
